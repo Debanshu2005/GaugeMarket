@@ -3,268 +3,245 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Indian Railways QR Generator</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-<style>
-    :root {
-        --rail: #102f45;
-        --rail-2: #18536f;
-        --saffron: #d9822b;
-        --green: #15803d;
-        --paper: #f4f7fa;
-        --line: #d9e2ea;
-    }
-    .azadi-logo {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        width: 190px;
-        height: auto;
-        z-index: 1000;
-    }
-    body {
-        background-color: var(--paper) !important;
-        font-family: 'Roboto', sans-serif;
-    }
-    h1 {
-        color: var(--rail) !important;
-        font-weight: bold;
-    }
-    .card {
-        border-radius: 8px;
-        border: 1px solid var(--line);
-        box-shadow: 0 16px 32px rgba(16,47,69,0.08);
-    }
-    .btn-primary {
-        background-color: var(--rail) !important;
-        border-color: var(--rail) !important;
-    }
-    .btn-outline-secondary {
-        border-color: #ff9933 !important;
-        color: #ff9933 !important;
-    }
-    .btn-outline-secondary:hover {
-        background-color: #ff9933 !important;
-        color: #fff !important;
-    }
-    .alert {
-        border-radius: 8px;
-    }
-    label {
-        font-weight: 500;
-    }
-    .footer-note {
-        font-size: 0.9rem;
-        color: #6c757d;
-    }
-    .rail-logo {
-        max-height: 50px;
-        margin-bottom: 15px;
-    }
-    .rail-hero {
-        background: linear-gradient(135deg, #ffffff 0%, #ffffff 58%, #e8f1f6 58%);
-        border-bottom: 5px solid var(--saffron);
-        border-radius: 0 0 8px 8px;
-        padding: 22px;
-    }
-    .hero-kicker {
-        color: var(--green);
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-    }
-    .vendor-actions {
-        margin-top: 15px;
-        padding-top: 15px;
-        border-top: 1px solid #dee2e6;
-    }
-    .marketplace-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 10px;
-    }
-    .quick-nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: center;
-        margin-top: 12px;
-    }
-</style>
+<title>RailQR — Railway Parts Registry</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='rail.css') }}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
-    <img src="{{ url_for('static', filename='image/azadi.png') }}" 
-         alt="Azadi Logo" 
-         class="azadi-logo">
 
-    <div class="container mt-5">
-        <div class="text-center mb-4 rail-hero">
-            <img src="{{ url_for('static', filename='image/rail.png') }}" 
-                 alt="Indian Railways Logo" class="rail-logo">
-            <div class="hero-kicker">Railway supply chain portal</div>
-            <h1>Rail QR Parts Registry</h1>
-            <p class="text-muted mb-2">Register, verify, engrave, and sell QR-linked railway components by vendor and division.</p>
-            <a href="{{ url_for('shop') }}" class="btn btn-outline-primary marketplace-link">
-                <i class="bi bi-shop"></i> Open Marketplace
-            </a>
-            <div class="quick-nav">
-                <a href="{{ url_for('cart') }}" class="btn btn-sm btn-outline-secondary">Cart</a>
-                <a href="{{ url_for('track_order') }}" class="btn btn-sm btn-outline-secondary">Track Order</a>
-                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm btn-outline-secondary">Admin</a>
-                <a href="{{ url_for('view_all') }}" class="btn btn-sm btn-outline-secondary">Inventory</a>
-            </div>
+<!-- TOPBAR -->
+<nav class="rq-topbar">
+  <div class="rq-topbar-inner">
+    <a href="{{ url_for('index') }}" class="rq-brand">
+      <img src="{{ url_for('static', filename='image/rail.png') }}" class="rq-brand-logo" alt="RailQR">
+      <span class="rq-brand-name">Rail<span>QR</span></span>
+    </a>
+    <div class="rq-nav">
+      <a href="{{ url_for('index') }}" class="active">Register Part</a>
+      <a href="{{ url_for('shop') }}">Marketplace</a>
+      <a href="{{ url_for('view_all') }}">Inventory</a>
+      <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+      <a href="{{ url_for('track_order') }}">Track Order</a>
+    </div>
+    <div class="rq-topbar-actions">
+      <a href="{{ url_for('cart') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-cart3"></i> Cart</a>
+      {% if session.get('vendor_id') %}
+      <a href="{{ url_for('vendor_dashboard') }}" class="btn btn-light btn-sm"><i class="bi bi-speedometer2"></i> Dashboard</a>
+      {% else %}
+      <a href="{{ url_for('vendor_login') }}" class="btn btn-light btn-sm"><i class="bi bi-person-circle"></i> Vendor Login</a>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="rq-hero">
+  <div class="container" style="position:relative;z-index:1;">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-7">
+        <div class="rq-hero-kicker"><i class="bi bi-qr-code"></i> Railway Supply Chain Portal</div>
+        <h1>Register &amp; Track Railway Parts</h1>
+        <p style="font-size:1.05rem;max-width:520px;">Generate QR-linked digital passports for railway components. Every part gets a unique QR code, AI-powered risk assessment, and full supply chain traceability.</p>
+        <div class="d-flex gap-2 flex-wrap mt-3">
+          <a href="{{ url_for('shop') }}" class="btn btn-saffron"><i class="bi bi-shop"></i> Open Marketplace</a>
+          <a href="{{ url_for('view_all') }}" class="btn btn-outline-light"><i class="bi bi-table"></i> View Inventory</a>
         </div>
+      </div>
+      <div class="col-lg-5 d-none d-lg-flex justify-content-end">
+        <img src="{{ url_for('static', filename='image/azadi.png') }}" alt="Azadi Ka Amrit Mahotsav" style="max-height:120px;opacity:.9;filter:drop-shadow(0 4px 16px rgba(0,0,0,.3));">
+      </div>
+    </div>
+  </div>
+</section>
 
-        <div class="card shadow p-4">
-            {% if error %}
-            <div class="alert alert-danger text-center">{{ error }}</div>
-            {% endif %}
+<!-- MAIN CONTENT -->
+<div class="container py-4">
 
-            <form method="POST">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">UID *</label>
-                        <input type="text" class="form-control" name="uid" value="{{ request.form.uid or '' }}" required>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Item Type *</label>
-                        <input type="text" class="form-control" name="item_type" value="{{ request.form.item_type or '' }}" required>
-                    </div>
-                </div>
+  {% if error %}
+  <div class="alert alert-danger mb-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}</div>
+  {% endif %}
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Vendor *</label>
-                        <input type="text" class="form-control" name="vendor" value="{{ request.form.vendor or '' }}" required>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Vendor Account</label>
-                        <select class="form-select" name="vendor_id">
-                            <option value="">-- Select Registered Vendor --</option>
-                            {% for vendor in vendors %}
-                            <option value="{{ vendor.id }}" {% if request.form.vendor_id == vendor.id|string %}selected{% endif %}>
-                                {{ vendor.company_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <small class="form-text text-muted">Select if vendor has a registered account</small>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Lot *</label>
-                        <input type="text" class="form-control" name="lot" value="{{ request.form.lot or '' }}" required>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Manufacturer's Number *</label>
-                        <input type="text" class="form-control" name="manufactor_number" value="{{ request.form.manufactor_number or '' }}" required>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Manufacturer's Email ID *</label>
-                        <input type="text" class="form-control" name="vendor_email" value="{{ request.form.vendor_email or '' }}" required>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Manufacture Date *</label>
-                        <input type="date" class="form-control" name="manufactor_date" value="{{ request.form.manufactor_date or '' }}" required>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Supply Date *</label>
-                        <input type="date" class="form-control" name="supply_date" value="{{ request.form.supply_date or '' }}" required>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label">Warranty End Date *</label>
-                        <input type="date" class="form-control" name="warranty_end" value="{{ request.form.warranty_end or '' }}" required>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" name="notes" placeholder="Enter maintenance notes">{{ request.form.notes or '' }}</textarea>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Category</label>
-                        <input type="text" class="form-control" name="category" value="{{ request.form.category or 'Rail Components' }}">
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Price</label>
-                        <input type="number" class="form-control" name="price" value="{{ request.form.price or '0' }}" min="0" step="0.01">
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Discount %</label>
-                        <input type="number" class="form-control" name="discount" value="{{ request.form.discount or '0' }}" min="0" max="100" step="0.01">
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <label class="form-label">Stock</label>
-                        <input type="number" class="form-control" name="stock" value="{{ request.form.stock or '0' }}" min="0" step="1">
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary w-100 py-2">
-                    <i class="bi bi-qr-code"></i> Generate QR Code
-                </button>
-            </form>
-
-            <div class="vendor-actions text-center">
-                <p class="text-muted mb-2">Vendor Account Management</p>
-                <div class="btn-group" role="group">
-                    <a href="{{ url_for('vendor_login') }}" class="btn btn-outline-primary">Vendor Login</a>
-                    <a href="{{ url_for('vendor_register') }}" class="btn btn-outline-success">Vendor Registration</a>
-                </div>
-            </div>
-
-            <div class="mt-3 text-center">
-                <a href="{{ url_for('view_all') }}" class="btn btn-outline-secondary me-2">View All Records</a>
-                {% if session.get('vendor_id') %}
-                <a href="{{ url_for('vendor_dashboard') }}" class="btn btn-outline-info">Vendor Dashboard</a>
-                {% endif %}
-            </div>
-
-            <p class="footer-note text-center mt-3">
-                © Indian Railways Fittings Department
-            </p>
+  <div class="row g-4">
+    <!-- FORM -->
+    <div class="col-lg-8">
+      <div class="rq-card">
+        <div class="rq-card-header">
+          <div>
+            <h2 style="font-size:1.05rem;"><i class="bi bi-plus-circle text-primary me-2"></i>Register New Railway Part</h2>
+            <p class="text-muted mb-0" style="font-size:.8125rem;">Fill in the details below to generate a QR-linked digital record.</p>
+          </div>
         </div>
+        <div class="rq-card-body">
+          <form method="POST">
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">UID <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="uid" value="{{ request.form.uid or '' }}" placeholder="e.g. 1312502" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Item Type <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="item_type" value="{{ request.form.item_type or '' }}" placeholder="e.g. Rail Pad, Bolt, Clip" required>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-0">
+              <div class="col-md-6">
+                <label class="form-label">Vendor Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="vendor" value="{{ request.form.vendor or '' }}" placeholder="Vendor company name" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Linked Vendor Account</label>
+                <select class="form-select" name="vendor_id">
+                  <option value="">— Select registered vendor —</option>
+                  {% for vendor in vendors %}
+                  <option value="{{ vendor.id }}" {% if request.form.vendor_id == vendor.id|string %}selected{% endif %}>{{ vendor.company_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-0">
+              <div class="col-md-6">
+                <label class="form-label">Lot Number <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="lot" value="{{ request.form.lot or '' }}" placeholder="Batch / lot identifier" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Manufacturer Number <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="manufactor_number" value="{{ request.form.manufactor_number or '' }}" placeholder="Manufacturer's part number" required>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-0">
+              <div class="col-12">
+                <label class="form-label">Manufacturer Email <span class="text-danger">*</span></label>
+                <input type="email" class="form-control" name="vendor_email" value="{{ request.form.vendor_email or '' }}" placeholder="manufacturer@example.com" required>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-0">
+              <div class="col-md-4">
+                <label class="form-label">Manufacture Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="manufactor_date" value="{{ request.form.manufactor_date or '' }}" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Supply Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="supply_date" value="{{ request.form.supply_date or '' }}" required>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Warranty End Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="warranty_end" value="{{ request.form.warranty_end or '' }}" required>
+              </div>
+            </div>
+
+            <div class="mt-3">
+              <label class="form-label">Inspection Notes</label>
+              <textarea class="form-control" name="notes" placeholder="Describe condition, defects, or maintenance observations…" rows="3">{{ request.form.notes or '' }}</textarea>
+              <small class="text-muted" style="font-size:.75rem;">AI risk assessment is based on these notes.</small>
+            </div>
+
+            <!-- Marketplace fields -->
+            <div style="background:var(--paper);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-top:16px;">
+              <p style="font-size:.8125rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:12px;"><i class="bi bi-shop me-1"></i>Marketplace Settings</p>
+              <div class="row g-3">
+                <div class="col-md-3">
+                  <label class="form-label">Category</label>
+                  <input type="text" class="form-control" name="category" value="{{ request.form.category or 'Rail Components' }}">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Price (₹)</label>
+                  <input type="number" class="form-control" name="price" value="{{ request.form.price or '0' }}" min="0" step="0.01">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Discount %</label>
+                  <input type="number" class="form-control" name="discount" value="{{ request.form.discount or '0' }}" min="0" max="100" step="0.01">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Stock</label>
+                  <input type="number" class="form-control" name="stock" value="{{ request.form.stock or '0' }}" min="0" step="1">
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg w-100 mt-4">
+              <i class="bi bi-qr-code-scan"></i> Generate QR &amp; Register Part
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
 
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <!-- SIDEBAR -->
+    <div class="col-lg-4">
+      <!-- Vendor actions -->
+      <div class="rq-card mb-3">
+        <div class="rq-card-body">
+          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:12px;"><i class="bi bi-building me-1"></i>Vendor Portal</p>
+          <div class="d-grid gap-2">
+            <a href="{{ url_for('vendor_login') }}" class="btn btn-outline-primary"><i class="bi bi-box-arrow-in-right"></i> Vendor Login</a>
+            <a href="{{ url_for('vendor_register') }}" class="btn btn-outline-navy"><i class="bi bi-person-plus"></i> Register as Vendor</a>
+          </div>
+        </div>
+      </div>
 
-    <script>
-    // Set default dates to today for better UX
-    document.addEventListener('DOMContentLoaded', function() {
-        const today = new Date().toISOString().split('T')[0];
-        
-        // Set default dates if not already set
-        const dateFields = ['manufactor_date', 'supply_date', 'warranty_end'];
-        dateFields.forEach(field => {
-            const input = document.querySelector(`input[name="${field}"]`);
-            if (input && !input.value) {
-                input.value = today;
-            }
-        });
+      <!-- How it works -->
+      <div class="rq-card mb-3">
+        <div class="rq-card-body">
+          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:14px;"><i class="bi bi-info-circle me-1"></i>How It Works</p>
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;">1</div>
+              <div><p style="font-size:.875rem;font-weight:600;margin:0;">Register the Part</p><p style="font-size:.8125rem;color:var(--ink-3);margin:0;">Fill in part details and vendor info.</p></div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--saffron-lt);color:var(--saffron);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;">2</div>
+              <div><p style="font-size:.875rem;font-weight:600;margin:0;">AI Risk Assessment</p><p style="font-size:.8125rem;color:var(--ink-3);margin:0;">Notes are analysed for risk level.</p></div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--green-lt);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;">3</div>
+              <div><p style="font-size:.875rem;font-weight:600;margin:0;">QR Code Generated</p><p style="font-size:.8125rem;color:var(--ink-3);margin:0;">Scan to verify, engrave for physical tagging.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        // Auto-fill vendor name when a registered vendor is selected
-        const vendorSelect = document.querySelector('select[name="vendor_id"]');
-        const vendorInput = document.querySelector('input[name="vendor"]');
-        
-        if (vendorSelect && vendorInput) {
-            vendorSelect.addEventListener('change', function() {
-                if (this.value) {
-                    // Extract vendor name from the option text
-                    const selectedOption = this.options[this.selectedIndex];
-                    const vendorName = selectedOption.text.split(' (')[0]; // Remove any additional info
-                    vendorInput.value = vendorName;
-                }
-            });
-        }
+      <!-- Quick links -->
+      <div class="rq-card">
+        <div class="rq-card-body">
+          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:12px;"><i class="bi bi-grid me-1"></i>Quick Links</p>
+          <div class="d-grid gap-2">
+            <a href="{{ url_for('view_all') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-table"></i> All Inventory Records</a>
+            <a href="{{ url_for('shop') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-shop"></i> Marketplace</a>
+            <a href="{{ url_for('cart') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-cart3"></i> Cart</a>
+            <a href="{{ url_for('track_order') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-geo-alt"></i> Track Order</a>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-speedometer2"></i> Admin Dashboard</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="rq-footer">
+  <img src="{{ url_for('static', filename='image/rail.png') }}" alt="Indian Railways" style="height:22px;opacity:.5;vertical-align:middle;margin-right:8px;">
+  © Indian Railways Fittings Department &nbsp;·&nbsp; <a href="{{ url_for('shop') }}">Marketplace</a> &nbsp;·&nbsp; <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+</footer>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const today = new Date().toISOString().split('T')[0];
+  ['manufactor_date','supply_date','warranty_end'].forEach(function(f) {
+    const el = document.querySelector('input[name="'+f+'"]');
+    if (el && !el.value) el.value = today;
+  });
+  const sel = document.querySelector('select[name="vendor_id"]');
+  const inp = document.querySelector('input[name="vendor"]');
+  if (sel && inp) {
+    sel.addEventListener('change', function() {
+      if (this.value) inp.value = this.options[this.selectedIndex].text;
     });
-    </script>
+  }
+});
+</script>
 </body>
 </html>
