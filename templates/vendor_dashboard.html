@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rail Vendor Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+:root { --rail:#102f45; --rail-2:#18536f; --saffron:#d9822b; --green:#15803d; --paper:#f4f7fa; --line:#d9e2ea; }
+body { background:var(--paper); color:#14212b; font-family: Arial, sans-serif; }
+.topbar { background:linear-gradient(135deg, var(--rail), var(--rail-2)); color:#fff; }
+.rail-logo { width:56px; height:56px; object-fit:contain; background:#fff; border-radius:8px; padding:6px; }
+.metric, .panel { background:#fff; border:1px solid var(--line); border-radius:8px; }
+.metric { padding:16px; height:100%; }
+.panel { padding:18px; }
+.division { border-left:5px solid var(--saffron); }
+.bar { height:10px; background:#dbe5ed; border-radius:999px; overflow:hidden; }
+.bar span { display:block; height:100%; background:linear-gradient(90deg, var(--saffron), var(--green)); }
+.table-wrap { overflow-x:auto; }
+.qr-box { max-width:210px; }
+.muted { color:#64748b; }
+</style>
+</head>
+<body>
+<section class="topbar py-4">
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <div class="d-flex align-items-center gap-3">
+        <img src="{{ url_for('static', filename='image/rail.png') }}" class="rail-logo" alt="Indian Railways Logo">
+        <div>
+          <p class="mb-1 text-white-50">Railway vendor operations</p>
+          <h1 class="h3 mb-0">{{ vendor.company_name }}</h1>
+          <p class="mb-0 text-white-50">{{ vendor.railway_zone or 'South Eastern Railway' }} | {{ vendor.railway_division or 'HWH Division' }}</p>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('index') }}" class="btn btn-light">Add Part</a>
+        <a href="{{ url_for('vendor_details', vendor_id=vendor.id) }}" class="btn btn-outline-light">Public Profile</a>
+        <a href="{{ url_for('shop') }}" class="btn btn-outline-light">Marketplace</a>
+        <a href="{{ url_for('vendor_logout') }}" class="btn btn-warning">Logout</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main class="container py-4">
+  {% if request.args.get('msg') %}
+  <div class="alert alert-info">{{ request.args.get('msg') }}</div>
+  {% endif %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-4">
+      <div class="panel division h-100">
+        <span class="badge bg-success mb-2">{{ vendor.supply_region or 'West Bengal, India' }}</span>
+        <h2 class="h5">{{ vendor.railway_zone or 'South Eastern Railway' }}</h2>
+        <p class="mb-1"><strong>Supplying to:</strong> {{ vendor.railway_division or 'HWH Division' }}</p>
+        <p class="mb-0 muted">Primary supply destination for QR-verified rail components.</p>
+      </div>
+    </div>
+    <div class="col-lg-8">
+      <div class="row g-3">
+        <div class="col-md-3"><div class="metric"><span class="muted">Products</span><h2 class="h4 mb-0">{{ products|length }}</h2></div></div>
+        <div class="col-md-3"><div class="metric"><span class="muted">Orders</span><h2 class="h4 mb-0">{{ orders|length }}</h2></div></div>
+        <div class="col-md-3"><div class="metric"><span class="muted">Rating</span><h2 class="h4 mb-0">{{ review_data.avg }} / 5</h2><small>{{ review_data.count }} reviews</small></div></div>
+        <div class="col-md-3"><div class="metric"><span class="muted">Risk</span><h2 class="h5 mb-0">{{ vendor.vendor_risk or 'Low' }}</h2></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="panel mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h5 mb-0">Revenue Graph</h2>
+          <span class="muted">Division supply performance</span>
+        </div>
+        {% for point in revenue_series %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between">
+            <span>{{ point.month }}</span>
+            <strong>Rs. {{ '%.0f'|format(point.revenue) }} · {{ point.units }} units</strong>
+          </div>
+          <div class="bar"><span style="width: {{ point.bar_pct }}%"></span></div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="panel mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h5 mb-0">Railway Parts Inventory</h2>
+          <a href="{{ url_for('index') }}" class="btn btn-sm btn-primary">Add Part</a>
+        </div>
+        {% if products %}
+        <div class="table-wrap">
+          <table class="table align-middle">
+            <thead><tr><th>UID</th><th>Part</th><th>Category</th><th>Price</th><th>Stock</th><th>Risk</th><th></th></tr></thead>
+            <tbody>
+              {% for product in products %}
+              <tr>
+                <td>{{ product.uid }}</td>
+                <td>{{ product.item_type }}</td>
+                <td>{{ product.category or 'Rail Components' }}</td>
+                <td>Rs. {{ '%.2f'|format(product.price or 0) }}</td>
+                <td>{{ product.stock or 0 }}</td>
+                <td><span class="badge {% if product.risk == 'High' %}bg-danger{% elif product.risk == 'Medium' %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ product.risk or 'Low' }}</span></td>
+                <td><a href="{{ url_for('view_record', uid=product.uid) }}" class="btn btn-sm btn-outline-primary">Manage</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="muted mb-0">No products registered yet.</p>
+        {% endif %}
+      </div>
+
+      <div class="panel">
+        <h2 class="h5 mb-3">Recent Division Orders</h2>
+        {% if orders %}
+        <div class="table-wrap">
+          <table class="table align-middle">
+            <thead><tr><th>Order</th><th>Customer</th><th>Part</th><th>Qty</th><th>Total</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {% for order in orders %}
+              <tr>
+                <td>{{ order.order_no }}</td>
+                <td>{{ order.customer_name }}</td>
+                <td>{{ order.product_name }}</td>
+                <td>{{ order.quantity }}</td>
+                <td>Rs. {{ '%.2f'|format(order.line_total or 0) }}</td>
+                <td><span class="badge bg-info text-dark">{{ order.status }}</span></td>
+                <td>
+                  <form method="post" action="{{ url_for('update_order_status', order_no=order.order_no) }}" class="d-flex gap-2">
+                    <select name="status" class="form-select form-select-sm">
+                      {% for status in ['Accepted', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Completed', 'Cancelled'] %}
+                      <option value="{{ status }}" {% if order.status == status %}selected{% endif %}>{{ status }}</option>
+                      {% endfor %}
+                    </select>
+                    <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="muted mb-0">No customer orders yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="panel mb-4 text-center">
+        <h2 class="h5">Vendor QR & Engraving</h2>
+        <img src="data:image/png;base64,{{ vendor_qr_code }}" alt="Vendor QR Code" class="img-fluid qr-box">
+        <p class="muted mt-2">QR includes vendor, division, region, and risk details.</p>
+        <div class="d-grid gap-2">
+          <a href="{{ url_for('download_vendor_qr', vendor_id=vendor.id) }}" class="btn btn-outline-primary">Download QR</a>
+          <a href="{{ url_for('download_vendor_gcode', vendor_id=vendor.id) }}" class="btn btn-outline-secondary">Download G-code</a>
+        </div>
+        <form method="POST" action="{{ url_for('send_vendor_gcode', vendor_id=vendor.id) }}" class="mt-3">
+          <div class="row g-2">
+            <div class="col-7">
+              <select name="method" class="form-select">
+                <option value="raster">Raster</option>
+                <option value="vector">Vector</option>
+              </select>
+            </div>
+            <div class="col-5"><button type="submit" class="btn btn-primary w-100">Engrave</button></div>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2 class="h5">Division Reviews</h2>
+        {% for review in review_data.reviews %}
+        <div class="border rounded p-3 mb-2">
+          <div class="d-flex justify-content-between"><strong>{{ review.reviewer_name }}</strong><span>{{ review.rating }} / 5</span></div>
+          <small class="muted">{{ review.railway_unit }}</small>
+          <p class="mb-0 mt-2">{{ review.comment or 'No written comment.' }}</p>
+        </div>
+        {% else %}
+        <p class="muted mb-0">No division reviews yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

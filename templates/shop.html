@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rail Marketplace</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+:root { --rail:#102f45; --rail-2:#18536f; --saffron:#d9822b; --green:#15803d; --paper:#f4f7fa; --line:#d9e2ea; }
+body { background:var(--paper); font-family: Arial, sans-serif; color:#14212b; }
+.hero { background:linear-gradient(135deg, var(--rail), var(--rail-2)); color:#fff; border-bottom:5px solid var(--saffron); }
+.hero-logo { width:58px; height:58px; object-fit:contain; background:#fff; border-radius:8px; padding:6px; }
+.product-card { border:1px solid var(--line); border-radius:8px; height:100%; background:#fff; box-shadow:0 10px 24px rgba(16,47,69,.07); }
+.qr-thumb { width:84px; height:84px; object-fit:contain; background:#f1f5f9; border-radius:8px; }
+.price { font-size:1.15rem; font-weight:700; }
+.division-pill { background:#e8f5ec; color:#166534; }
+.filter-card { border:1px solid var(--line); border-radius:8px; }
+</style>
+</head>
+<body>
+<section class="hero py-4">
+  <div class="container d-flex justify-content-between align-items-center flex-wrap gap-3">
+    <div class="d-flex gap-3 align-items-center">
+      <img src="{{ url_for('static', filename='image/rail.png') }}" class="hero-logo" alt="Indian Railways Logo">
+      <div>
+        <p class="mb-1 text-white-50">Indian Railways supply marketplace</p>
+        <h1 class="h2 mb-1">Rail QR Parts Exchange</h1>
+        <p class="mb-0">QR-verified components mapped to zones, divisions, vendors, and reviews.</p>
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('cart') }}" class="btn btn-light">Cart ({{ cart_count }})</a>
+      <a href="{{ url_for('track_order') }}" class="btn btn-outline-light">Track Order</a>
+      <a href="{{ url_for('index') }}" class="btn btn-outline-light">Seller Tools</a>
+    </div>
+  </div>
+</section>
+
+<main class="container py-4">
+  <form method="get" class="card card-body shadow-sm mb-4 filter-card">
+    <div class="row g-2 align-items-end">
+      <div class="col-lg-5">
+        <label class="form-label">Search</label>
+        <input name="q" class="form-control" value="{{ query }}" placeholder="Product, seller, UID, category">
+      </div>
+      <div class="col-lg-3">
+        <label class="form-label">Category</label>
+        <select name="category" class="form-select">
+          <option value="">All categories</option>
+          {% for item in categories %}
+          <option value="{{ item }}" {% if category == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-lg-2">
+        <label class="form-label">Sort</label>
+        <select name="sort" class="form-select">
+          <option value="latest" {% if sort_by == 'latest' %}selected{% endif %}>Latest</option>
+          <option value="price_low" {% if sort_by == 'price_low' %}selected{% endif %}>Price Low</option>
+          <option value="price_high" {% if sort_by == 'price_high' %}selected{% endif %}>Price High</option>
+          <option value="stock" {% if sort_by == 'stock' %}selected{% endif %}>Stock</option>
+          <option value="risk" {% if sort_by == 'risk' %}selected{% endif %}>Risk</option>
+        </select>
+      </div>
+      <div class="col-lg-2">
+        <button class="btn btn-primary w-100" type="submit">Filter</button>
+      </div>
+    </div>
+  </form>
+
+  {% if products %}
+  <div class="row g-3">
+    {% for product in products %}
+    <div class="col-md-6 col-xl-4">
+      <div class="product-card p-3">
+        <div class="d-flex gap-3">
+          <img class="qr-thumb" src="{{ url_for('generated_qrcode', filename=product.uid ~ '_display.png') }}" alt="QR for {{ product.uid }}">
+          <div class="flex-grow-1">
+            <div class="d-flex justify-content-between gap-2">
+              <h2 class="h5 mb-1">{{ product.item_type }}</h2>
+              <span class="badge bg-light text-dark">{{ product.category or 'Rail Components' }}</span>
+            </div>
+            <p class="text-muted mb-1">UID {{ product.uid }}</p>
+            <p class="mb-1">
+              <span class="badge division-pill">{{ product.railway_division }}</span>
+              <span class="badge bg-light text-dark">{{ product.supply_region }}</span>
+            </p>
+            <p class="mb-1">Seller:
+              {% if product.vendor_id %}
+              <a href="{{ url_for('vendor_details', vendor_id=product.vendor_id) }}">{{ product.vendor }}</a>
+              {% else %}
+              {{ product.vendor }}
+              {% endif %}
+            </p>
+            <p class="mb-0 text-muted">Part {{ product.review_summary.avg }} / 5 · Vendor {{ product.vendor_review_summary.avg }} / 5</p>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-end mt-3">
+          <div>
+            <div class="price">Rs. {{ '%.2f'|format(product.sale_price or 0) }}</div>
+            {% if product.discount %}
+            <small class="text-success">{{ product.discount }}% off</small>
+            {% endif %}
+            <div><small class="text-muted">{{ product.stock or 0 }} in stock</small></div>
+          </div>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('view_record', uid=product.uid) }}" class="btn btn-outline-secondary btn-sm">Details</a>
+            {% if product.stock and product.price %}
+            <form method="post" action="{{ url_for('add_to_cart', uid=product.uid) }}">
+              <button class="btn btn-primary btn-sm" type="submit">Add</button>
+            </form>
+            {% else %}
+            <button class="btn btn-secondary btn-sm" type="button" disabled>Unavailable</button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center bg-white border rounded p-5">
+    <h2 class="h5">No products match your filters</h2>
+    <p class="text-muted">Try another search or add marketplace-ready stock from the seller tools.</p>
+    <a href="{{ url_for('index') }}" class="btn btn-primary">Add Product</a>
+  </div>
+  {% endif %}
+</main>
+</body>
+</html>

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fitting Details</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<style>
+    .azadi-logo {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 240px;
+        height: auto;
+        z-index: 1000;
+    }
+    body { background-color: #f8f9fa; font-family: 'Roboto', sans-serif; }
+    h1 { color: #0d6efd; font-weight: bold; }
+    .card { border-radius: 12px; border: 2px solid #0d6efd33; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .btn-outline-secondary { border-color: #ff9933; color: #ff9933; }
+    .btn-outline-secondary:hover { background-color: #ff9933; color: #fff; }
+    th { width: 200px; }
+    .rail-logo { max-height: 50px; margin-bottom: 15px; }
+    .footer-note { font-size: 0.9rem; color: #6c757d; }
+    .alert-msg { margin-bottom: 15px; }
+    .vendor-link { color: #0d6efd; text-decoration: none; }
+    .vendor-link:hover { text-decoration: underline; }
+    .engrave-options { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin-top: 15px; }
+</style>
+</head>
+<body>
+<img src="{{ url_for('static', filename='image/azadi.png') }}" alt="Azadi Logo" class="azadi-logo">
+
+<div class="container mt-5">
+    <div class="text-center mb-4">
+        <img src="{{ url_for('static', filename='image/rail.png') }}" class="rail-logo" alt="Indian Railways Logo">
+        <h1>Fitting Details</h1>
+    </div>
+
+    {% if message %}
+    <div class="alert alert-info alert-msg text-center" role="alert">
+        {{ message }}
+    </div>
+    {% endif %}
+
+    <div class="card shadow p-4">
+        <table class="table table-bordered">
+            <tr><th>UID</th><td>{{ row['uid'] }}</td></tr>
+            <tr><th>Item Type</th><td>{{ row['item_type'] }}</td></tr>
+            <tr>
+                <th>Vendor</th>
+                <td>
+                    {% if row['vendor_id'] %}
+                        <a href="{{ url_for('vendor_details', vendor_id=row['vendor_id']) }}" class="vendor-link">
+                            {{ row['vendor'] }}
+                        </a>
+                    {% else %}
+                        {{ row['vendor'] }}
+                    {% endif %}
+                </td>
+            </tr>
+            <tr><th>Lot</th><td>{{ row['lot'] }}</td></tr>
+            <tr><th>Date of Supply</th><td>{{ row['supply_date'] }}</td></tr>
+            <tr><th>Category</th><td>{{ row['category'] or "Rail Components" }}</td></tr>
+            <tr><th>Marketplace Price</th><td>Rs. {{ '%.2f'|format(row['price'] or 0) }}</td></tr>
+            <tr><th>Discount</th><td>{{ row['discount'] or 0 }}%</td></tr>
+            <tr><th>Stock</th><td>{{ row['stock'] or 0 }}</td></tr>
+            <tr><th>Warranty End</th><td>{{ row['warranty_end'] }}</td></tr>
+            <tr><th>Manufacture Date</th><td>{{ row['manufactor_date'] }}</td></tr>
+            <tr><th>Manufacturer's Number</th><td>{{ row['manufactor_number'] }}</td></tr>
+            <tr><th>Manufacturer's Email ID</th><td>{{ row['vendor_email'] }}</td></tr>
+
+            <tr>
+                <th>UDM Sync</th>
+                <td>
+                    {% if row['udm_synced'] == 1 %}
+                        <span class="badge bg-success">Synced</span>
+                    {% else %}
+                        <span class="badge bg-danger">Pending</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>TMS Sync</th>
+                <td>
+                    {% if row['tms_synced'] == 1 %}
+                        <span class="badge bg-success">Synced</span>
+                    {% else %}
+                        <span class="badge bg-danger">Pending</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>Risk Level</th>
+                <td>
+                    {% if row['risk'] == 'High' %}
+                        <span class="badge bg-danger">High</span>
+                    {% elif row['risk'] == 'Medium' %}
+                        <span class="badge bg-warning text-dark">Medium</span>
+                    {% else %}
+                        <span class="badge bg-success">Low</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <th>Next Inspection / Repair Date</th>
+                <td>{{ row['inspection_date'] }}</td>
+            </tr>
+            <tr>
+                <th>Vendor Risk</th>
+                <td>
+                    {% if row['vendor_risk'] == 'High' %}
+                        <span class="badge bg-danger">High</span>
+                    {% elif row['vendor_risk'] == 'Medium' %}
+                        <span class="badge bg-warning text-dark">Medium</span>
+                    {% else %}
+                        <span class="badge bg-success">Low</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr><th>Notes</th><td>{{ row['notes'] or "No notes available" }}</td></tr>
+        </table>
+
+        <div class="text-center mt-3">
+          <img src="{{ url_for('generated_qrcode', filename=row['uid'] + '_display.png') }}?{{ range(100000)|random }}"
+             alt="QR Code" class="img-fluid" style="max-width: 200px; background-color: pink; padding: 10px; border-radius: 8px;">
+
+            <p class="mt-2 text-muted">Scan this QR to verify fitting details</p>
+        </div>
+
+        <div class="border rounded p-3 mt-4">
+            <h5 class="mb-3">Marketplace Settings</h5>
+            <form method="post" action="{{ url_for('update_marketplace_settings', uid=row['uid']) }}" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Category</label>
+                    <input class="form-control" name="category" value="{{ row['category'] or 'Rail Components' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Price</label>
+                    <input class="form-control" type="number" name="price" value="{{ row['price'] or 0 }}" min="0" step="0.01">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Discount %</label>
+                    <input class="form-control" type="number" name="discount" value="{{ row['discount'] or 0 }}" min="0" max="100" step="0.01">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Stock</label>
+                    <input class="form-control" type="number" name="stock" value="{{ row['stock'] or 0 }}" min="0" step="1">
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-primary w-100" type="submit">Save</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="engrave-options">
+            <h5 class="text-center mb-3">QR Code Engraving Options</h5>
+            
+            <!-- Send G-code to ESP32 Button -->
+            <form method="POST" action="{{ url_for('send_gcode', uid=row['uid']) }}" class="text-center mb-3">
+                <div class="row justify-content-center">
+                    <div class="col-md-4 mb-2">
+                        <select name="method" class="form-select">
+                            <option value="raster">Raster Engraving</option>
+                            <option value="vector">Vector Engraving</option>
+                            <option value="fallback">Fallback Method</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <input type="number" name="stream_delay" value="0.02" step="0.01" min="0.01" max="1.0" 
+                               class="form-control" placeholder="Command Delay">
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary w-100">Send to Engraver</button>
+                    </div>
+                </div>
+            </form>
+
+            <div class="text-center">
+                <!-- Regenerate QR Button -->
+                <form method="POST" action="{{ url_for('regenerate_qr', uid=row['uid']) }}" style="display:inline; margin-right:10px;">
+                    <button type="submit" class="btn btn-outline-secondary px-4">Regenerate QR</button>
+                </form>
+
+                <!-- Test QR Button -->
+                <a href="{{ url_for('test_qr', uid=row['uid']) }}" class="btn btn-outline-info px-4" style="margin-right:10px;">
+                    Test QR
+                </a>
+
+                <!-- Scan QR Button -->
+                <a href="{{ url_for('scan', uid=row['uid']) }}" class="btn btn-outline-success px-4">
+                    Scan QR
+                </a>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h5>Customer Reviews</h5>
+            <p class="text-muted">{{ review_summary.avg }} / 5 from {{ review_summary.count }} reviews</p>
+            <form method="post" action="{{ url_for('add_review', uid=row['uid']) }}" class="row g-2 mb-3">
+                <div class="col-md-3">
+                    <input class="form-control" name="customer_name" placeholder="Name">
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" name="rating">
+                        <option value="5">5</option>
+                        <option value="4">4</option>
+                        <option value="3">3</option>
+                        <option value="2">2</option>
+                        <option value="1">1</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <input class="form-control" name="comment" placeholder="Review">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" type="submit">Add Review</button>
+                </div>
+            </form>
+
+            {% if reviews %}
+                {% for review in reviews %}
+                <div class="border rounded p-3 mb-2">
+                    <div class="d-flex justify-content-between">
+                        <strong>{{ review.customer_name }}</strong>
+                        <span>{{ review.rating }} / 5</span>
+                    </div>
+                    <p class="mb-0 text-muted">{{ review.comment or 'No comment provided.' }}</p>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">No reviews yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="mt-4 text-center">
+            <!-- Back to All Records -->
+            <a href="/all" class="btn btn-outline-secondary px-4">Back to All Records</a>
+            <a href="{{ url_for('shop') }}" class="btn btn-outline-success px-4" style="margin-left:10px;">
+                Marketplace
+            </a>
+            {% if row['stock'] and row['price'] %}
+            <form method="post" action="{{ url_for('add_to_cart', uid=row['uid']) }}" style="display:inline; margin-left:10px;">
+                <button type="submit" class="btn btn-primary px-4">Add to Cart</button>
+            </form>
+            {% endif %}
+            
+            <!-- Vendor Dashboard Link (if applicable) -->
+            {% if row['vendor_id'] %}
+                <a href="{{ url_for('vendor_dashboard') }}" class="btn btn-outline-primary px-4" style="margin-left:10px;">
+                    Vendor Dashboard
+                </a>
+            {% endif %}
+        </div>
+
+        <p class="footer-note text-center mt-3">© Indian Railways Fittings Department</p>
+    </div>
+</div>
+
+<script>
+// Simple confirmation for regenerate action
+document.addEventListener('DOMContentLoaded', function() {
+    const regenerateForm = document.querySelector('form[action*="regenerate_qr"]');
+    if (regenerateForm) {
+        regenerateForm.addEventListener('submit', function(e) {
+            if (!confirm('Are you sure you want to regenerate the QR code? This will create a new QR code image.')) {
+                e.preventDefault();
+            }
+        });
+    }
+    
+    const sendGcodeForm = document.querySelector('form[action*="send_gcode"]');
+    if (sendGcodeForm) {
+        sendGcodeForm.addEventListener('submit', function(e) {
+            if (!confirm('This will send G-code commands to the engraving machine. Continue?')) {
+                e.preventDefault();
+            }
+        });
+    }
+});
+</script>
+</body>
+</html>

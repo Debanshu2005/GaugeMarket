@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+:root { --rail:#102f45; --rail-2:#18536f; --saffron:#d9822b; --green:#15803d; --paper:#f4f7fa; --line:#d9e2ea; }
+body { background:var(--paper); font-family: Arial, sans-serif; color:#14212b; }
+.metric { background:#fff; border:1px solid var(--line); border-radius:8px; padding:16px; height:100%; }
+.table-wrap { overflow-x:auto; }
+.admin-head { background:linear-gradient(135deg, var(--rail), var(--rail-2)); color:#fff; border-bottom:5px solid var(--saffron); }
+.card { border-radius:8px; border:1px solid var(--line); }
+</style>
+</head>
+<body>
+<section class="admin-head py-4 mb-4">
+  <div class="container d-flex justify-content-between align-items-center flex-wrap gap-3">
+    <div>
+      <p class="mb-1 text-white-50">Railway supply command centre</p>
+      <h1 class="h3 mb-0">Admin Dashboard</h1>
+      <p class="mb-0 text-white-50">Orders, sellers, divisions, reviews, and QR-linked inventory.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('shop') }}" class="btn btn-outline-light">Marketplace</a>
+      <a href="{{ url_for('view_all') }}" class="btn btn-light">Inventory</a>
+    </div>
+  </div>
+</section>
+<main class="container py-2">
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="metric"><span class="text-muted">Revenue</span><h2 class="h4 mb-0">Rs. {{ '%.2f'|format(revenue or 0) }}</h2></div></div>
+    <div class="col-md-3"><div class="metric"><span class="text-muted">Orders</span><h2 class="h4 mb-0">{{ order_count }}</h2></div></div>
+    <div class="col-md-3"><div class="metric"><span class="text-muted">Sellers</span><h2 class="h4 mb-0">{{ seller_count }}</h2></div></div>
+    <div class="col-md-3"><div class="metric"><span class="text-muted">Low Stock</span><h2 class="h4 mb-0">{{ low_stock_count }}</h2></div></div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card shadow-sm">
+        <div class="card-header bg-white"><h2 class="h5 mb-0">Recent Orders</h2></div>
+        <div class="card-body table-wrap">
+          {% if recent_orders %}
+          <table class="table align-middle">
+            <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th>Created</th></tr></thead>
+            <tbody>
+              {% for order in recent_orders %}
+              <tr>
+                <td>{{ order.order_no }}</td>
+                <td>{{ order.customer_name }}</td>
+                <td><span class="badge bg-info text-dark">{{ order.status }}</span></td>
+                <td>Rs. {{ '%.2f'|format(order.grand_total or 0) }}</td>
+                <td>{{ order.created_at }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="text-muted mb-0">No orders yet.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white"><h2 class="h5 mb-0">Order Status</h2></div>
+        <div class="card-body">
+          {% if status_counts %}
+          {% for row in status_counts %}
+          <div class="d-flex justify-content-between border-bottom py-2">
+            <span>{{ row[0] }}</span>
+            <strong>{{ row[1] }}</strong>
+          </div>
+          {% endfor %}
+          {% else %}
+          <p class="text-muted mb-0">No status data yet.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-header bg-white"><h2 class="h5 mb-0">Category Inventory</h2></div>
+        <div class="card-body">
+          {% for category in categories %}
+          <div class="d-flex justify-content-between border-bottom py-2">
+            <span>{{ category.category or 'Uncategorized' }}</span>
+            <span>{{ category.product_count }} products, {{ category.stock_count }} stock</span>
+          </div>
+          {% else %}
+          <p class="text-muted mb-0">No products yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="card shadow-sm mt-4">
+        <div class="card-header bg-white"><h2 class="h5 mb-0">Railway Divisions</h2></div>
+        <div class="card-body">
+          {% for division in divisions %}
+          <div class="border-bottom py-2">
+            <div class="d-flex justify-content-between">
+              <strong>{{ division.railway_division or 'HWH Division' }}</strong>
+              <span>{{ division.seller_count }} sellers</span>
+            </div>
+            <small class="text-muted">{{ division.railway_zone or 'South Eastern Railway' }} · {{ division.supply_region or 'West Bengal, India' }}</small>
+          </div>
+          {% else %}
+          <p class="text-muted mb-0">No division data yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

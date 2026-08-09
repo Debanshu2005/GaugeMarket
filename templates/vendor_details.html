@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ vendor.company_name }} - Railway Supplier</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+:root { --rail:#102f45; --track:#d9822b; --signal:#15803d; --ink:#14212b; --muted:#64748b; }
+body { background:#eef3f7; color:var(--ink); font-family: Arial, sans-serif; }
+.rail-hero { background:linear-gradient(135deg, #102f45 0%, #18536f 62%, #f4f7fa 62%); color:#fff; }
+.rail-logo { width:58px; height:58px; object-fit:contain; background:#fff; border-radius:8px; padding:6px; }
+.division-card, .metric, .product-card, .review-card { background:#fff; border:1px solid #d9e2ea; border-radius:8px; }
+.metric { padding:16px; height:100%; }
+.division-card { padding:18px; border-left:5px solid var(--track); }
+.badge-zone { background:#e8f5ec; color:#166534; }
+.bar { height:10px; background:#dbe5ed; border-radius:999px; overflow:hidden; }
+.bar span { display:block; height:100%; background:linear-gradient(90deg, var(--track), var(--signal)); }
+.product-card { height:100%; }
+.review-score { font-size:2rem; font-weight:700; color:var(--rail); }
+</style>
+</head>
+<body>
+<section class="rail-hero py-4">
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+      <div class="d-flex gap-3 align-items-start">
+        <img src="{{ url_for('static', filename='image/rail.png') }}" class="rail-logo" alt="Indian Railways Logo">
+        <div>
+          <p class="mb-1 text-white-50">Indian Railways verified vendor</p>
+          <h1 class="h2 mb-2">{{ vendor.company_name }}</h1>
+          <p class="mb-0">{{ vendor.address or 'Vendor address not provided' }}</p>
+        </div>
+      </div>
+      <div class="text-end">
+        <span class="badge {% if vendor.vendor_risk == 'High' %}bg-danger{% elif vendor.vendor_risk == 'Medium' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+          {{ vendor.vendor_risk or 'Low' }} Risk
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main class="container py-4">
+  <div class="row g-3 mb-4">
+    <div class="col-lg-5">
+      <div class="division-card h-100">
+        <span class="badge badge-zone mb-2">{{ vendor.supply_region or 'West Bengal, India' }}</span>
+        <h2 class="h4 mb-2">{{ vendor.railway_zone or 'South Eastern Railway' }}</h2>
+        <p class="mb-1"><strong>Supplying to:</strong> {{ vendor.railway_division or 'HWH Division' }}</p>
+        <p class="mb-0 text-muted">Primary division and region for QR-verified railway parts supply.</p>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div class="row g-3">
+        <div class="col-md-4"><div class="metric"><span class="text-muted">Vendor Rating</span><div class="review-score">{{ review_data.avg }}</div><small>{{ review_data.count }} reviews</small></div></div>
+        <div class="col-md-4"><div class="metric"><span class="text-muted">Products</span><h3 class="h4 mb-0">{{ products|length }}</h3><small>QR-linked stock</small></div></div>
+        <div class="col-md-4"><div class="metric"><span class="text-muted">Contact</span><h3 class="h6 mb-1">{{ vendor.contact_person }}</h3><small>{{ vendor.email }}</small></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="division-card mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h5 mb-0">Revenue Trend</h2>
+          <span class="text-muted">Railway supply orders</span>
+        </div>
+        {% for point in revenue_series %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between">
+            <span>{{ point.month }}</span>
+            <strong>Rs. {{ '%.0f'|format(point.revenue) }}</strong>
+          </div>
+          <div class="bar"><span style="width: {{ point.bar_pct }}%"></span></div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h4 mb-0">Parts Supplied</h2>
+        <a href="{{ url_for('shop') }}" class="btn btn-outline-primary">Marketplace</a>
+      </div>
+      {% if products %}
+      <div class="row g-3">
+        {% for product in products %}
+        <div class="col-md-6">
+          <div class="product-card p-3">
+            <div class="d-flex justify-content-between gap-2">
+              <h3 class="h6">{{ product.item_type }}</h3>
+              <span class="badge bg-light text-dark">{{ product.category or 'Rail Components' }}</span>
+            </div>
+            <p class="text-muted mb-2">UID {{ product.uid }} | Lot {{ product.lot }}</p>
+            <p class="mb-2">Rs. {{ '%.2f'|format(product.price or 0) }}{% if product.discount %} <span class="text-success">{{ product.discount }}% off</span>{% endif %}</p>
+            <p class="mb-3">Stock: {{ product.stock or 0 }}</p>
+            <div class="d-flex gap-2">
+              <a href="{{ url_for('view_record', uid=product.uid) }}" class="btn btn-sm btn-outline-secondary">Details</a>
+              {% if product.stock and product.price %}
+              <form method="post" action="{{ url_for('add_to_cart', uid=product.uid) }}">
+                <button class="btn btn-sm btn-primary" type="submit">Add to Cart</button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center bg-white p-5 border rounded">
+        <h3 class="h5">No active parts listed</h3>
+        <p class="text-muted mb-0">This vendor has not published marketplace inventory yet.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="col-lg-5">
+      <div class="division-card mb-4">
+        <h2 class="h5">Division Reviews</h2>
+        <form method="post" action="{{ url_for('add_vendor_review', vendor_id=vendor.id) }}" class="row g-2 mb-3">
+          <div class="col-md-6"><input name="reviewer_name" class="form-control" placeholder="Reviewer"></div>
+          <div class="col-md-6"><input name="railway_unit" class="form-control" value="{{ vendor.railway_division or 'HWH Division' }}"></div>
+          <div class="col-md-4">
+            <select name="rating" class="form-select">
+              <option value="5">5</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option>
+            </select>
+          </div>
+          <div class="col-md-8"><input name="comment" class="form-control" placeholder="Review"></div>
+          <div class="col-12"><button class="btn btn-primary w-100" type="submit">Add Review</button></div>
+        </form>
+
+        {% for review in review_data.reviews %}
+        <div class="review-card p-3 mb-2">
+          <div class="d-flex justify-content-between">
+            <strong>{{ review.reviewer_name }}</strong>
+            <span>{{ review.rating }} / 5</span>
+          </div>
+          <small class="text-muted">{{ review.railway_unit }}</small>
+          <p class="mb-0 mt-2">{{ review.comment or 'No written comment.' }}</p>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No division reviews yet.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>
