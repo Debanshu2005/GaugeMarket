@@ -35,7 +35,7 @@ This is a Python Flask web application designed for generating, scanning, and ma
    # Or directly:
    python app.py
    ```
-4. Access the web UI at `http://127.0.0.1:5000/`.
+4. Access the web UI at `https://rail-qr-marketplace.vercel.app/`.
 
 ## Deployment
 
