@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app.py": {
+      "excludeFiles": "{__tests__/**,__pycache__/**,graphify-out/**,workspace.json,workspacememory.md,*.log,*.pkl,*.pyc,static/**/*.gcode,static/image/*.pdf}"
+    }
+  }
+}

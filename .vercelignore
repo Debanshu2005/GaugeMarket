@@ -1,0 +1,11 @@
+__pycache__/
+__tests__/
+graphify-out/
+workspace.json
+workspacememory.md
+*.log
+*.pkl
+*.pyc
+static/**/*.gcode
+static/image/*.pdf
+.janitor-audit-log

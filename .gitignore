@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+_pycache_/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Runtime files
+*.log
+*.pkl
+*.sqlite
+*.sqlite3
+instance/
+
+# Local databases
+fittings.db
+vendors.db
+
+# Generated QR / engraving outputs
+static/qrcodes/
+static/vendor_qrcodes/
+static/vendor_gcode/
+*.gcode
+
+# Local tooling and deployment state
+.vercel/
+_archive/
+archive/
+incremental_push.py
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
