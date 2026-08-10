@@ -142,7 +142,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Access the web UI at **http://localhost:5000**
+Access the web UI at **https://rail-qr-marketplace.vercel.app/**
 
 - Register/login as a vendor from the portal.
 - Browse fittings in the marketplace shop.
