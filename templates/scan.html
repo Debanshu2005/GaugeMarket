@@ -1,324 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Professional QR Code Scanner">
-  <title>QR Code Scanner | Professional Edition</title>
-  <style>
-    :root {
-      --primary: #2c3e50;
-      --secondary: #3498db;
-      --accent: #2ecc71;
-      --dark: #2c3e50;
-      --light: #ecf0f1;
-      --danger: #e74c3c;
-      --shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, var(--light) 0%, #f5f7fa 100%);
-      color: var(--dark);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-    }
-
-    .container {
-      max-width: 1200px;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2rem;
-    }
-
-    header {
-      width: 100%;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem 0;
-      margin-bottom: 2rem;
-    }
-
-    .logo {
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: var(--primary);
-      text-decoration: none;
-    }
-
-    .logo span {
-      color: var(--secondary);
-    }
-
-    nav ul {
-      display: flex;
-      gap: 1.5rem;
-      list-style: none;
-    }
-
-    nav a {
-      text-decoration: none;
-      color: var(--dark);
-      font-weight: 500;
-      transition: color 0.3s;
-    }
-
-    nav a:hover {
-      color: var(--secondary);
-    }
-
-    .hero {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2rem;
-      text-align: center;
-    }
-
-    .hero h1 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      color: var(--primary);
-      margin-bottom: 0.5rem;
-    }
-
-    .hero p {
-      font-size: 1.2rem;
-      color: var(--dark);
-      line-height: 1.6;
-      max-width: 800px;
-    }
-
-    .scanner-container {
-      width: 100%;
-      max-width: 800px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: var(--shadow);
-      padding: 2rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1.5rem;
-    }
-
-    .scanner {
-      width: 100%;
-      aspect-ratio: 1/1;
-      max-width: 600px;
-      border: 2px dashed var(--secondary);
-      border-radius: 8px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .scanner::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(45deg, rgba(255, 255, 255, 0.1) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.1) 75%, transparent 75%, transparent);
-      background-size: 40px 40px;
-      animation: scan 2s linear infinite;
-    }
-
-    @keyframes scan {
-      0% {
-        transform: translateY(-100%);
-      }
-      100% {
-        transform: translateY(100%);
-      }
-    }
-
-    .scanner-icon {
-      width: 100px;
-      height: 100px;
-      color: var(--secondary);
-    }
-
-    .scanner-text {
-      font-size: 1.2rem;
-      color: var(--dark);
-      text-align: center;
-      margin-top: 1rem;
-    }
-
-    .buttons {
-      display: flex;
-      gap: 1rem;
-      width: 100%;
-      justify-content: center;
-    }
-
-    button {
-      padding: 0.8rem 1.5rem;
-      border: none;
-      border-radius: 6px;
-      font-size: 1rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .btn-primary {
-      background: var(--secondary);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: #2980b9;
-    }
-
-    .btn-secondary {
-      background: var(--light);
-      color: var(--dark);
-      border: 1px solid var(--secondary);
-    }
-
-    .btn-secondary:hover {
-      background: #f5f7fa;
-    }
-
-    footer {
-      width: 100%;
-      margin-top: 4rem;
-      padding: 2rem 0;
-      border-top: 1px solid #e0e0e0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .footer-text {
-      color: #7f8c8d;
-      font-size: 0.9rem;
-    }
-
-    .social-icons {
-      display: flex;
-      gap: 1rem;
-    }
-
-    .social-icon {
-      width: 24px;
-      height: 24px;
-      fill: #7f8c8d;
-      transition: fill 0.3s;
-    }
-
-    .social-icon:hover {
-      fill: var(--secondary);
-    }
-
-    @media (max-width: 768px) {
-      .hero h1 {
-        font-size: 2rem;
-      }
-
-      .hero p {
-        font-size: 1rem;
-      }
-
-      .scanner {
-        max-width: 400px;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .scanner::before {
-        animation: none;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Scan — UID {{ uid }} | RailQR</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='rail.css') }}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+  body { display:flex; flex-direction:column; min-height:100vh; }
+  .scan-page { flex:1; display:flex; align-items:center; justify-content:center; padding:32px 16px; }
+  .scan-card {
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    width: 100%;
+    max-width: 440px;
+  }
+  .scan-header {
+    background: var(--navy);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 3px solid var(--saffron);
+  }
+  .scan-body { padding: 28px 24px; text-align: center; }
+  .scan-footer {
+    background: var(--paper);
+    border-top: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  @keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(29,111,219,.35); }
+    70%  { box-shadow: 0 0 0 14px rgba(29,111,219,0); }
+    100% { box-shadow: 0 0 0 0 rgba(29,111,219,0); }
+  }
+  .rq-scan-frame { animation: pulse-ring 2.5s ease-out infinite; }
+</style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <a href="/" class="logo">QR<span>Scan</span>Pro</a>
-      <nav>
-        <ul>
-          <li><a href="/">Home</a></li>
-          <li><a href="/about">About</a></li>
-          <li><a href="/contact">Contact</a></li>
-        </ul>
-      </nav>
-    </header>
 
-    <section class="hero">
-      <h1>Professional QR Code Scanner</h1>
-      <p>Scan QR codes with precision and security. Our advanced scanner provides fast, accurate results with enterprise-grade protection.</p>
-    </section>
+<!-- TOPBAR -->
+<nav class="rq-topbar">
+  <div class="rq-topbar-inner">
+    <a href="{{ url_for('index') }}" class="rq-brand">
+      <img src="{{ url_for('static', filename='image/rail.png') }}" class="rq-brand-logo" alt="RailQR">
+      <span class="rq-brand-name">Rail<span>QR</span></span>
+    </a>
+    <div class="rq-nav">
+      <a href="{{ url_for('index') }}">Register Part</a>
+      <a href="{{ url_for('shop') }}">Marketplace</a>
+      <a href="{{ url_for('view_all') }}">Inventory</a>
+    </div>
+    <div class="rq-topbar-actions">
+      <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-house"></i> Home</a>
+    </div>
+  </div>
+</nav>
 
-    <div class="scanner-container">
-      <div class="scanner">
-        <svg class="scanner-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M19 11H5v2h14v-2zm-2-4H7v2h10V7zm-2 8H9v2h6v-2z" fill="currentColor"/>
-        </svg>
-        <p class="scanner-text">Position your QR code within the frame to scan</p>
-      </div>
-      <div class="buttons">
-        <button class="btn-primary">Start Scan</button>
-        <button class="btn-secondary">Upload Image</button>
+<div class="scan-page">
+  <div class="scan-card">
+
+    <!-- Header -->
+    <div class="scan-header">
+      <img src="{{ url_for('static', filename='image/rail.png') }}" style="width:36px;height:36px;object-fit:contain;background:rgba(255,255,255,.12);border-radius:8px;padding:4px;" alt="RailQR">
+      <div>
+        <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.55);">Railway Component Verification</div>
+        <div style="font-size:1rem;font-weight:800;color:#fff;">Digital Part Pass</div>
       </div>
     </div>
 
-    <footer>
-      <div class="footer-text">© 2023 QRScanPro. All rights reserved.</div>
-      <div class="social-icons">
-        <svg class="social-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 22.066V14.269h-3.164v-2.828h3.164V6.928h2.828v4.513h3.164v2.828H14.828v7.797h-2.828z" fill="currentColor"/>
-        </svg>
-        <svg class="social-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M23 3h-6.5a3.5 3.5 0 0 0 3.5 3.5v1.5H21V21h-3.5V8.5h-1.5v12.5H12V8.5h-1.5v12.5H6.5V21H3V8.5h1.5V5A3.5 3.5 0 0 0 3 8.5V21a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-11 18H8.5V8.5h3.5v12.5zm7.5-12.5h-3.5v12.5h3.5V8.5z" fill="currentColor"/>
-        </svg>
-        <svg class="social-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-16c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z" fill="currentColor"/>
-        </svg>
+    <!-- Body -->
+    <div class="scan-body">
+
+      <!-- QR Frame -->
+      <div class="rq-scan-frame mb-4">
+        <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code for {{ uid }}">
       </div>
-    </footer>
+
+      <!-- UID -->
+      <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);margin-bottom:4px;">Part UID</div>
+      <div style="font-size:1.75rem;font-weight:800;color:var(--ink);letter-spacing:.02em;margin-bottom:20px;">{{ uid }}</div>
+
+      <!-- Risk badges -->
+      <div style="display:flex;justify-content:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+        <div style="text-align:center;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:4px;">Part Risk</div>
+          {% if risk == 'High' %}
+          <span class="rq-badge rq-badge-red" style="font-size:.875rem;padding:6px 14px;"><i class="bi bi-exclamation-triangle-fill"></i> High</span>
+          {% elif risk == 'Medium' %}
+          <span class="rq-badge rq-badge-amber" style="font-size:.875rem;padding:6px 14px;"><i class="bi bi-dash-circle-fill"></i> Medium</span>
+          {% else %}
+          <span class="rq-badge rq-badge-green" style="font-size:.875rem;padding:6px 14px;"><i class="bi bi-check-circle-fill"></i> Low</span>
+          {% endif %}
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:4px;">Vendor Risk</div>
+          {% if vendor_risk == 'High' %}
+          <span class="rq-badge rq-badge-red" style="font-size:.875rem;padding:6px 14px;"><i class="bi bi-exclamation-triangle-fill"></i> High</span>
+          {% elif vendor_risk == 'Medium' %}
+          <span class="rq-badge rq-badge-amber" style="font-size:.875rem;padding:6px 14px;"><i class="bi bi-dash-circle-fill"></i> Medium</span>
+          {% else %}
+          <span class="rq-badge rq-badge-green" style="font-size:.875rem;padding:6px 14px;"><i class="bi bi-check-circle-fill"></i> Low</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Inspection date -->
+      <div style="background:var(--paper);border:1px solid var(--border);border-radius:10px;padding:12px 16px;display:inline-flex;align-items:center;gap:10px;">
+        <i class="bi bi-calendar-check" style="font-size:1.25rem;color:var(--blue);"></i>
+        <div style="text-align:left;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);">Next Inspection</div>
+          <div style="font-size:.9375rem;font-weight:700;color:var(--ink);">{{ inspection_date }}</div>
+        </div>
+      </div>
+
+      <!-- Verified stamp -->
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--green);font-size:.8125rem;font-weight:700;">
+        <i class="bi bi-patch-check-fill"></i> Verified by Indian Railways QR System
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="scan-footer">
+      <a href="{{ url_for('view_record', uid=uid) }}" class="btn btn-primary btn-sm"><i class="bi bi-file-text"></i> Full Details</a>
+      <a href="{{ url_for('shop') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-shop"></i> Marketplace</a>
+      <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-house"></i> Home</a>
+    </div>
   </div>
+</div>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Initialize scanner functionality
-      console.log('QR Scanner initialized');
-
-      // Add event listeners for buttons
-      document.querySelector('.btn-primary').addEventListener('click', function() {
-        console.log('Scan started');
-        // Implement scan functionality here
-      });
-
-      document.querySelector('.btn-secondary').addEventListener('click', function() {
-        console.log('Image upload initiated');
-        // Implement upload functionality here
-      });
-
-      // Accessibility enhancements
-      document.querySelector('.scanner').setAttribute('role', 'region');
-      document.querySelector('.scanner').setAttribute('aria-label', 'QR code scanner area');
-    });
-  </script>
+<footer class="rq-footer" style="margin-top:0;">
+  © Indian Railways Fittings Department
+</footer>
 </body>
 </html>

@@ -1,0 +1,633 @@
+/* ============================================================
+   RailQR Design System — shared across all templates
+   ============================================================ */
+
+/* --- Google Font --- */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+/* --- Design Tokens --- */
+:root {
+  --navy:      #0f2744;
+  --navy-2:    #1a3a5c;
+  --navy-3:    #234e7a;
+  --blue:      #1d6fdb;
+  --blue-lt:   #e8f1fb;
+  --saffron:   #e07b2a;
+  --saffron-lt:#fff3e8;
+  --green:     #16a34a;
+  --green-lt:  #dcfce7;
+  --amber:     #d97706;
+  --amber-lt:  #fef3c7;
+  --red:       #dc2626;
+  --red-lt:    #fee2e2;
+  --paper:     #f5f7fa;
+  --white:     #ffffff;
+  --ink:       #0f2744;
+  --ink-2:     #334155;
+  --ink-3:     #64748b;
+  --border:    #dde3ec;
+  --border-2:  #c8d3e0;
+  --shadow-sm: 0 1px 3px rgba(15,39,68,.07), 0 1px 2px rgba(15,39,68,.05);
+  --shadow:    0 4px 12px rgba(15,39,68,.09), 0 1px 3px rgba(15,39,68,.06);
+  --shadow-lg: 0 12px 32px rgba(15,39,68,.12), 0 4px 8px rgba(15,39,68,.07);
+  --radius:    10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --transition: 150ms ease;
+}
+
+/* --- Reset & Base --- */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Typography --- */
+h1, h2, h3, h4, h5, h6 { font-weight: 700; color: var(--ink); line-height: 1.25; }
+.text-muted { color: var(--ink-3) !important; }
+a { color: var(--blue); text-decoration: none; transition: color var(--transition); }
+a:hover { color: var(--navy-2); }
+
+/* ============================================================
+   TOPBAR / NAVBAR
+   ============================================================ */
+.rq-topbar {
+  background: var(--navy);
+  border-bottom: 3px solid var(--saffron);
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 12px rgba(15,39,68,.18);
+}
+.rq-topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 24px;
+  height: 64px;
+}
+.rq-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.rq-brand-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  background: rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 4px;
+}
+.rq-brand-name {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -.01em;
+}
+.rq-brand-name span { color: var(--saffron); }
+.rq-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+.rq-nav a {
+  color: rgba(255,255,255,.75);
+  font-size: .875rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.rq-nav a:hover, .rq-nav a.active {
+  color: #fff;
+  background: rgba(255,255,255,.1);
+}
+.rq-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  font-size: .875rem;
+  border-radius: 8px;
+  padding: 8px 18px;
+  transition: all var(--transition);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid transparent;
+  line-height: 1.4;
+}
+.btn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+.btn-primary:hover { background: #1660c4; border-color: #1660c4; color: #fff; }
+.btn-primary:active { background: #1254ae; }
+
+.btn-navy {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+.btn-navy:hover { background: var(--navy-2); border-color: var(--navy-2); color: #fff; }
+
+.btn-saffron {
+  background: var(--saffron);
+  border-color: var(--saffron);
+  color: #fff;
+}
+.btn-saffron:hover { background: #c96e22; border-color: #c96e22; color: #fff; }
+
+.btn-outline-primary {
+  background: transparent;
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.btn-outline-primary:hover { background: var(--blue-lt); color: var(--blue); }
+
+.btn-outline-navy {
+  background: transparent;
+  border-color: var(--navy);
+  color: var(--navy);
+}
+.btn-outline-navy:hover { background: var(--navy); color: #fff; }
+
+.btn-outline-light {
+  background: transparent;
+  border-color: rgba(255,255,255,.35);
+  color: rgba(255,255,255,.9);
+}
+.btn-outline-light:hover { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.6); }
+
+.btn-light {
+  background: #fff;
+  border-color: #fff;
+  color: var(--navy);
+}
+.btn-light:hover { background: #f0f4f8; color: var(--navy); }
+
+.btn-outline-secondary {
+  background: transparent;
+  border-color: var(--border-2);
+  color: var(--ink-2);
+}
+.btn-outline-secondary:hover { background: var(--paper); border-color: var(--ink-3); color: var(--ink); }
+
+.btn-outline-danger {
+  background: transparent;
+  border-color: var(--red);
+  color: var(--red);
+}
+.btn-outline-danger:hover { background: var(--red-lt); }
+
+.btn-sm { padding: 5px 12px; font-size: .8125rem; border-radius: 6px; }
+.btn-lg { padding: 11px 24px; font-size: 1rem; border-radius: 10px; }
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.rq-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+.rq-card:hover { box-shadow: var(--shadow); }
+.rq-card-body { padding: 20px 24px; }
+.rq-card-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rq-card-header h2, .rq-card-header h3 { margin: 0; font-size: 1rem; }
+
+/* ============================================================
+   BADGES / PILLS
+   ============================================================ */
+.rq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .75rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+.rq-badge-blue   { background: var(--blue-lt);    color: var(--blue); }
+.rq-badge-green  { background: var(--green-lt);   color: var(--green); }
+.rq-badge-amber  { background: var(--amber-lt);   color: var(--amber); }
+.rq-badge-red    { background: var(--red-lt);     color: var(--red); }
+.rq-badge-navy   { background: rgba(15,39,68,.08); color: var(--navy); }
+.rq-badge-saffron{ background: var(--saffron-lt); color: var(--saffron); }
+
+/* ============================================================
+   FORMS
+   ============================================================ */
+.form-label {
+  font-size: .8125rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 5px;
+}
+.form-control, .form-select {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: .875rem;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 13px;
+  color: var(--ink);
+  background: var(--white);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(29,111,219,.12);
+  outline: none;
+}
+.form-control::placeholder { color: var(--ink-3); }
+textarea.form-control { resize: vertical; min-height: 90px; }
+
+/* ============================================================
+   TABLES
+   ============================================================ */
+.rq-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.rq-table th {
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+  padding: 10px 14px;
+  border-bottom: 1.5px solid var(--border);
+  white-space: nowrap;
+  background: var(--paper);
+}
+.rq-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--ink-2);
+}
+.rq-table tbody tr:last-child td { border-bottom: none; }
+.rq-table tbody tr:hover td { background: #f8fafc; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ============================================================
+   HERO SECTIONS
+   ============================================================ */
+.rq-hero {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 55%, var(--navy-3) 100%);
+  color: #fff;
+  border-bottom: 3px solid var(--saffron);
+  padding: 40px 0;
+  position: relative;
+  overflow: hidden;
+}
+.rq-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 80% 50%, rgba(29,111,219,.18) 0%, transparent 60%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0px, rgba(255,255,255,.025) 1px, transparent 1px, transparent 60px);
+  pointer-events: none;
+}
+.rq-hero-kicker {
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--saffron);
+  margin-bottom: 8px;
+}
+.rq-hero h1 { color: #fff; font-size: 2rem; font-weight: 800; margin-bottom: 8px; }
+.rq-hero p  { color: rgba(255,255,255,.75); margin-bottom: 0; }
+
+/* ============================================================
+   METRIC CARDS
+   ============================================================ */
+.rq-metric {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+  height: 100%;
+}
+.rq-metric-label {
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.rq-metric-value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.rq-metric-sub { font-size: .8125rem; color: var(--ink-3); }
+
+/* ============================================================
+   QR TICKET CARD
+   ============================================================ */
+.rq-ticket {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.rq-ticket-header {
+  background: var(--navy);
+  color: #fff;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.rq-ticket-body {
+  padding: 20px;
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.rq-ticket-qr {
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rq-ticket-qr img { width: 100%; height: 100%; object-fit: contain; }
+.rq-ticket-info { flex: 1; min-width: 0; }
+.rq-ticket-footer {
+  border-top: 1px dashed var(--border);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--paper);
+  font-size: .8125rem;
+  color: var(--ink-3);
+}
+
+/* ============================================================
+   RISK INDICATORS
+   ============================================================ */
+.risk-high   { color: var(--red);   background: var(--red-lt);   }
+.risk-medium { color: var(--amber); background: var(--amber-lt); }
+.risk-low    { color: var(--green); background: var(--green-lt); }
+
+/* ============================================================
+   PROGRESS / BAR CHART
+   ============================================================ */
+.rq-bar-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.rq-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--blue), var(--navy-3));
+  transition: width .4s ease;
+}
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
+.alert {
+  border-radius: var(--radius);
+  border: 1.5px solid transparent;
+  padding: 12px 16px;
+  font-size: .875rem;
+  font-weight: 500;
+}
+.alert-danger  { background: var(--red-lt);   border-color: #fca5a5; color: #991b1b; }
+.alert-success { background: var(--green-lt); border-color: #86efac; color: #166534; }
+.alert-info    { background: var(--blue-lt);  border-color: #93c5fd; color: #1e40af; }
+.alert-warning { background: var(--amber-lt); border-color: #fcd34d; color: #92400e; }
+
+/* ============================================================
+   EMPTY STATES
+   ============================================================ */
+.rq-empty {
+  text-align: center;
+  padding: 56px 24px;
+  color: var(--ink-3);
+}
+.rq-empty-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  opacity: .35;
+}
+.rq-empty h3 { font-size: 1.1rem; color: var(--ink-2); margin-bottom: 6px; }
+.rq-empty p  { font-size: .875rem; margin-bottom: 20px; }
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.rq-footer {
+  background: var(--navy);
+  color: rgba(255,255,255,.5);
+  text-align: center;
+  padding: 20px;
+  font-size: .8125rem;
+  margin-top: 48px;
+  border-top: 3px solid var(--saffron);
+}
+.rq-footer a { color: rgba(255,255,255,.65); }
+.rq-footer a:hover { color: #fff; }
+
+/* ============================================================
+   PRODUCT CARD (shop)
+   ============================================================ */
+.rq-product-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  height: 100%;
+  transition: box-shadow var(--transition), transform var(--transition);
+  display: flex;
+  flex-direction: column;
+}
+.rq-product-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+.rq-product-qr {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--paper);
+}
+.rq-product-qr img { width: 100%; height: 100%; object-fit: contain; }
+.rq-product-price { font-size: 1.2rem; font-weight: 800; color: var(--ink); }
+.rq-product-original { font-size: .8125rem; color: var(--ink-3); text-decoration: line-through; }
+
+/* ============================================================
+   TIMELINE (track order)
+   ============================================================ */
+.rq-timeline { display: flex; flex-direction: column; gap: 0; }
+.rq-timeline-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding-bottom: 20px;
+  position: relative;
+}
+.rq-timeline-step:last-child { padding-bottom: 0; }
+.rq-timeline-step::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 24px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+.rq-timeline-step:last-child::before { display: none; }
+.rq-timeline-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--white);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+.rq-timeline-dot.active {
+  background: var(--blue);
+  border-color: var(--blue);
+}
+.rq-timeline-dot.done {
+  background: var(--green);
+  border-color: var(--green);
+}
+.rq-timeline-label { font-size: .875rem; font-weight: 500; padding-top: 2px; }
+.rq-timeline-label.active { color: var(--blue); font-weight: 700; }
+.rq-timeline-label.done   { color: var(--green); }
+
+/* ============================================================
+   STAR RATING
+   ============================================================ */
+.rq-stars { color: #f59e0b; letter-spacing: 1px; }
+
+/* ============================================================
+   REVIEW CARD
+   ============================================================ */
+.rq-review {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+/* ============================================================
+   SCAN PAGE
+   ============================================================ */
+.rq-scan-frame {
+  width: 220px;
+  height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 3px solid var(--blue);
+  box-shadow: 0 0 0 6px rgba(29,111,219,.12);
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+.rq-scan-frame img { width: 100%; height: 100%; object-fit: contain; }
+
+/* ============================================================
+   DIVISION ACCENT CARD
+   ============================================================ */
+.rq-division-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--saffron);
+  border-radius: var(--radius-lg);
+  padding: 20px 22px;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 768px) {
+  .rq-topbar-inner { padding: 0 16px; }
+  .rq-nav { display: none; }
+  .rq-hero h1 { font-size: 1.5rem; }
+  .rq-hero { padding: 28px 0; }
+  .rq-metric-value { font-size: 1.4rem; }
+  .rq-ticket-body { flex-direction: column; }
+  .rq-ticket-qr { width: 100%; height: auto; aspect-ratio: 1; max-width: 160px; }
+  .rq-card-body { padding: 16px; }
+  .rq-card-header { padding: 14px 16px; }
+}
+
+@media (max-width: 480px) {
+  .rq-topbar-actions .btn-outline-light { display: none; }
+  .rq-topbar-actions .btn-light { display: none; }
+}
+
+/* ============================================================
+   UTILITY OVERRIDES
+   ============================================================ */
+.shadow-sm { box-shadow: var(--shadow-sm) !important; }
+.shadow    { box-shadow: var(--shadow) !important; }
+.rounded   { border-radius: var(--radius) !important; }
+.fw-semibold { font-weight: 600; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }

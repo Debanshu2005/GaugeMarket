@@ -1,0 +1,2123 @@
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, session
+import secrets
+from flask import session
+import sqlite3
+import os
+import shutil
+import tempfile
+import threading
+import webbrowser
+import time
+import socket
+import json
+from datetime import datetime, timedelta
+import io
+import base64
+import qrcode
+import requests
+import hashlib
+# Try to import AI-stylized QR generator; fall back if unavailable
+try:
+    import qrcode_artistic
+    from qrcode_artistic import qr_art
+    HAS_AI_QR = True
+except Exception:
+    qrcode_artistic = None
+    qr_art = None
+    HAS_AI_QR = False
+
+# OpenCV / numpy / PIL
+import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+import asyncio
+import websockets
+import secrets
+
+# External modules (assumed available)
+from udm import push_to_udm
+from tms import push_to_tms
+from ai_module import get_risk_level, update_all_risks, QRAnomalyDetector
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(16))
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IS_VERCEL = bool(os.environ.get("VERCEL"))
+RUNTIME_DIR = tempfile.gettempdir() if IS_VERCEL else BASE_DIR
+
+def runtime_path(filename):
+    return os.path.join(RUNTIME_DIR, filename)
+
+def prepare_runtime_file(filename):
+    source = os.path.join(BASE_DIR, filename)
+    target = runtime_path(filename)
+    if IS_VERCEL and os.path.exists(source) and not os.path.exists(target):
+        shutil.copyfile(source, target)
+    return target
+
+DB = os.environ.get("FITTINGS_DB_PATH", prepare_runtime_file("fittings.db"))
+VENDOR_DB = os.environ.get("VENDOR_DB_PATH", prepare_runtime_file("vendors.db"))
+
+# QR code directory. Vercel functions can write to /tmp, not the bundled source tree.
+qr_dir = os.environ.get(
+    "QR_OUTPUT_DIR",
+    os.path.join(RUNTIME_DIR, "qrcodes") if IS_VERCEL else os.path.join(BASE_DIR, "static", "qrcodes")
+)
+os.makedirs(qr_dir, exist_ok=True)
+vendor_qr_dir = os.environ.get(
+    "VENDOR_QR_OUTPUT_DIR",
+    os.path.join(RUNTIME_DIR, "vendor_qrcodes") if IS_VERCEL else os.path.join(BASE_DIR, "static", "vendor_qrcodes")
+)
+os.makedirs(vendor_qr_dir, exist_ok=True)
+vendor_gcode_dir = os.environ.get(
+    "VENDOR_GCODE_OUTPUT_DIR",
+    os.path.join(RUNTIME_DIR, "vendor_gcode") if IS_VERCEL else os.path.join(BASE_DIR, "static", "vendor_gcode")
+)
+os.makedirs(vendor_gcode_dir, exist_ok=True)
+
+# ESP32 endpoint (update if you want)
+ESP32_IP = "192.168.29.109"
+ESP32_WS = f"ws://{ESP32_IP}:81"
+
+# QR Anomaly Detector instance
+qr_detector = QRAnomalyDetector()
+
+# === Configuration: enable/disable AI-stylized QR ===
+USE_AI_QR = True
+
+# Path for a logo/background to embed into QR (user insisted logo is mandatory)
+AI_QR_EMBED_IMAGE = os.environ.get("AI_QR_EMBED_IMAGE", os.path.join(BASE_DIR, "static", "image", "rail.png"))
+
+# === Database Connection Helper ===
+def get_db_connection():
+    conn = sqlite3.connect(DB)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def get_vendor_db_connection():
+    conn = sqlite3.connect(VENDOR_DB)
+    conn.row_factory = sqlite3.Row  # This makes rows behave like dictionaries
+    return conn
+
+def init_vendor_db():
+    conn = sqlite3.connect(VENDOR_DB)
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS vendors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_name TEXT NOT NULL,
+            contact_person TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            phone TEXT,
+            address TEXT,
+            railway_zone TEXT DEFAULT 'South Eastern Railway',
+            railway_division TEXT DEFAULT 'HWH Division',
+            supply_region TEXT DEFAULT 'West Bengal, India',
+            registration_date TEXT,
+            vendor_risk TEXT DEFAULT 'Low',
+            failure_count INTEGER DEFAULT 0
+        )
+    ''')
+    c.execute("PRAGMA table_info(vendors)")
+    existing_cols = {row[1] for row in c.fetchall()}
+    wanted = {
+        "railway_zone": "TEXT DEFAULT 'South Eastern Railway'",
+        "railway_division": "TEXT DEFAULT 'HWH Division'",
+        "supply_region": "TEXT DEFAULT 'West Bengal, India'",
+    }
+    for col, coltype in wanted.items():
+        if col not in existing_cols:
+            c.execute(f"ALTER TABLE vendors ADD COLUMN {col} {coltype}")
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS vendor_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vendor_id INTEGER NOT NULL,
+            reviewer_name TEXT NOT NULL,
+            railway_unit TEXT,
+            rating INTEGER NOT NULL,
+            comment TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(vendor_id) REFERENCES vendors(id)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# Initialize vendor database at startup
+init_vendor_db()
+# === Ensure table has required columns (adds missing columns automatically) ===
+def ensure_table_columns():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS fittings (
+            uid TEXT PRIMARY KEY,
+            item_type TEXT,
+            vendor TEXT,
+            vendor_id TEXT,
+            lot TEXT,
+            supply_date TEXT,
+            warranty TEXT,
+            warranty_end TEXT,
+            manufactor_date TEXT,
+            manufactor_number TEXT,
+            notes TEXT,
+            vendor_email TEXT,
+            udm_synced INTEGER DEFAULT 0,
+            tms_synced INTEGER DEFAULT 0,
+            risk_flag INTEGER DEFAULT 0,
+            risk TEXT DEFAULT 'Low',
+            vendor_risk TEXT DEFAULT 'Low',
+            category TEXT DEFAULT 'Rail Components',
+            price REAL DEFAULT 0,
+            discount REAL DEFAULT 0,
+            stock INTEGER DEFAULT 0,
+            image_url TEXT
+        )
+    """)
+    c.execute("PRAGMA table_info(fittings)")
+    existing_cols = {row[1] for row in c.fetchall()}
+
+    wanted = {
+        "inspection_date": "TEXT",
+        "repair_date": "TEXT",
+        "failure_count": "INTEGER DEFAULT 0",
+        "manufactor_date": "TEXT",
+        "vendor_email":"TEXT",
+        "manufactor_number": "TEXT",
+        "vendor_risk": "TEXT",
+        "vendor_id": "TEXT",
+        "category": "TEXT DEFAULT 'Rail Components'",
+        "price": "REAL DEFAULT 0",
+        "discount": "REAL DEFAULT 0",
+        "stock": "INTEGER DEFAULT 0",
+        "image_url": "TEXT"
+    }
+
+    for col, coltype in wanted.items():
+        if col not in existing_cols:
+            try:
+                c.execute(f"ALTER TABLE fittings ADD COLUMN {col} {coltype}")
+                print(f"[DB] Added missing column: {col}")
+            except Exception as e:
+                print(f"[DB] Failed adding column {col}: {e}")
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS marketplace_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_no TEXT UNIQUE NOT NULL,
+            customer_name TEXT NOT NULL,
+            customer_email TEXT NOT NULL,
+            customer_phone TEXT,
+            shipping_address TEXT NOT NULL,
+            payment_method TEXT NOT NULL,
+            status TEXT DEFAULT 'Placed',
+            subtotal REAL DEFAULT 0,
+            discount_total REAL DEFAULT 0,
+            tax_total REAL DEFAULT 0,
+            shipping_total REAL DEFAULT 0,
+            grand_total REAL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS marketplace_order_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            uid TEXT NOT NULL,
+            vendor_id TEXT,
+            product_name TEXT NOT NULL,
+            vendor TEXT,
+            unit_price REAL DEFAULT 0,
+            quantity INTEGER DEFAULT 1,
+            line_total REAL DEFAULT 0,
+            FOREIGN KEY(order_id) REFERENCES marketplace_orders(id)
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS marketplace_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT NOT NULL,
+            customer_name TEXT NOT NULL,
+            rating INTEGER NOT NULL,
+            comment TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+# Run schema check at startup
+ensure_table_columns()
+
+def get_vendor_db_connection():
+    conn = sqlite3.connect(VENDOR_DB)
+    conn.row_factory = sqlite3.Row   # 🔑 this is the fix
+    return conn
+
+
+def hash_password(password):
+    """Hash a password for storing."""
+    salt = secrets.token_hex(16)
+    return f"{salt}${hashlib.sha256((salt + password).encode()).hexdigest()}"
+
+def verify_password(stored_password, provided_password):
+    """Verify a stored password against one provided by user"""
+    if not stored_password or '$' not in stored_password:
+        return False
+    salt, hashed = stored_password.split('$', 1)
+    return hashed == hashlib.sha256((salt + provided_password).encode()).hexdigest()
+
+def parse_money(value, default=0.0):
+    try:
+        return max(float(value), 0.0)
+    except (TypeError, ValueError):
+        return default
+
+def parse_int(value, default=0):
+    try:
+        return max(int(value), 0)
+    except (TypeError, ValueError):
+        return default
+
+def selling_price(product):
+    price = parse_money(product.get('price'))
+    discount = min(parse_money(product.get('discount')), 100.0)
+    return round(price * (1 - discount / 100), 2)
+
+def get_cart():
+    cart = session.get('cart', {})
+    return {str(uid): parse_int(qty, 1) for uid, qty in cart.items() if parse_int(qty, 0) > 0}
+
+def save_cart(cart):
+    session['cart'] = cart
+    session.modified = True
+
+def load_cart_items():
+    cart = get_cart()
+    if not cart:
+        return [], {
+            "subtotal": 0,
+            "discount_total": 0,
+            "tax_total": 0,
+            "shipping_total": 0,
+            "grand_total": 0,
+            "item_count": 0,
+        }
+
+    placeholders = ",".join("?" for _ in cart)
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute(f"SELECT * FROM fittings WHERE uid IN ({placeholders})", tuple(cart.keys()))
+    rows = c.fetchall()
+    conn.close()
+
+    items = []
+    subtotal = 0.0
+    discount_total = 0.0
+    item_count = 0
+    for row in rows:
+        product = {key: row[key] for key in row.keys()}
+        price = parse_money(product.get('price'))
+        sale_price = selling_price(product)
+        quantity = min(cart.get(product['uid'], 1), max(parse_int(product.get('stock')), 1))
+        line_total = round(sale_price * quantity, 2)
+        item_count += quantity
+        subtotal += line_total
+        discount_total += round((price - sale_price) * quantity, 2)
+        product.update({
+            "quantity": quantity,
+            "sale_price": sale_price,
+            "line_total": line_total,
+        })
+        items.append(product)
+
+    tax_total = round(subtotal * 0.05, 2)
+    shipping_total = 0 if subtotal >= 5000 or subtotal == 0 else 149
+    totals = {
+        "subtotal": round(subtotal, 2),
+        "discount_total": round(discount_total, 2),
+        "tax_total": tax_total,
+        "shipping_total": shipping_total,
+        "grand_total": round(subtotal + tax_total + shipping_total, 2),
+        "item_count": item_count,
+    }
+    return items, totals
+
+def marketplace_categories():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT DISTINCT category FROM fittings WHERE COALESCE(category, '') <> '' ORDER BY category")
+    categories = [row[0] for row in c.fetchall()]
+    conn.close()
+    return categories
+
+def product_review_summary(uid):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT AVG(rating), COUNT(*) FROM marketplace_reviews WHERE uid=?", (uid,))
+    avg_rating, count = c.fetchone()
+    conn.close()
+    return {
+        "avg": round(avg_rating or 0, 1),
+        "count": count or 0,
+    }
+
+def vendor_review_summary(vendor_id):
+    conn = get_vendor_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT AVG(rating), COUNT(*) FROM vendor_reviews WHERE vendor_id=?", (vendor_id,))
+    avg_rating, count = c.fetchone()
+    c.execute("SELECT * FROM vendor_reviews WHERE vendor_id=? ORDER BY created_at DESC LIMIT 8", (vendor_id,))
+    reviews = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
+    conn.close()
+    return {
+        "avg": round(avg_rating or 0, 1),
+        "count": count or 0,
+        "reviews": reviews,
+    }
+
+def vendor_revenue_series(vendor_id, vendor_name):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT substr(o.created_at, 1, 7) AS month,
+               COALESCE(SUM(i.line_total), 0) AS revenue,
+               COALESCE(SUM(i.quantity), 0) AS units
+        FROM marketplace_order_items i
+        JOIN marketplace_orders o ON o.id = i.order_id
+        WHERE i.vendor_id=? OR i.vendor=?
+        GROUP BY substr(o.created_at, 1, 7)
+        ORDER BY month ASC
+        LIMIT 12
+    """, (str(vendor_id), vendor_name))
+    rows = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
+    conn.close()
+
+    if not rows:
+        rows = [
+            {"month": "Apr", "revenue": 185000, "units": 42},
+            {"month": "May", "revenue": 242000, "units": 58},
+            {"month": "Jun", "revenue": 218000, "units": 51},
+            {"month": "Jul", "revenue": 296000, "units": 64},
+            {"month": "Aug", "revenue": 334000, "units": 73},
+        ]
+
+    max_revenue = max(parse_money(row.get("revenue")) for row in rows) or 1
+    for row in rows:
+        row["revenue"] = round(parse_money(row.get("revenue")), 2)
+        row["units"] = parse_int(row.get("units"))
+        row["bar_pct"] = max(round((row["revenue"] / max_revenue) * 100), 4)
+    return rows
+
+# === Date calculation helpers ===
+def calculate_dates(manufactor_date, supply_date, warranty_end_str, risk):
+    today = datetime.today().date()
+    base_date = None
+    for d in (manufactor_date, supply_date):
+        if d:
+            try:
+                base_date = datetime.strptime(d, "%Y-%m-%d").date()
+                break
+            except Exception:
+                base_date = None
+    if base_date is None:
+        base_date = today
+
+    warranty_end = None
+    if warranty_end_str:
+        try:
+            warranty_end = datetime.strptime(warranty_end_str, "%Y-%m-%d").date()
+        except Exception:
+            warranty_end = None
+
+    if risk == "High":
+        inspection_date = base_date + timedelta(days=30)
+    elif risk == "Medium":
+        inspection_date = base_date + timedelta(days=90)
+    else:
+        inspection_date = base_date + timedelta(days=180)
+
+    if risk == "High":
+        repair_date = today + timedelta(days=60)
+    elif risk == "Medium":
+        repair_date = today + timedelta(days=120)
+    else:
+        repair_date = warranty_end if warranty_end else (today + timedelta(days=365))
+
+    if warranty_end:
+        if inspection_date > warranty_end:
+            inspection_date = warranty_end
+        if repair_date > warranty_end:
+            repair_date = warranty_end
+
+    return inspection_date.isoformat(), repair_date.isoformat()
+
+def compute_next_inspection(inspection_date_str, repair_date_str, risk):
+    today = datetime.today().date()
+    if inspection_date_str:
+        try:
+            dt = datetime.strptime(inspection_date_str, "%Y-%m-%d").date()
+            return dt.isoformat()
+        except Exception:
+            pass
+
+    if repair_date_str:
+        try:
+            rd = datetime.strptime(repair_date_str, "%Y-%m-%d").date()
+            if risk == "High":
+                delta = timedelta(days=90)
+            elif risk == "Medium":
+                delta = timedelta(days=180)
+            else:
+                delta = timedelta(days=365)
+            next_dt = rd + delta
+            return next_dt.isoformat()
+        except Exception:
+            pass
+
+    return "Not scheduled"
+
+# === Vendor Risk Calculation Helper ===
+def calculate_vendor_risk(vendor):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM fittings WHERE vendor=? AND risk_flag=1", (vendor,))
+    failures = c.fetchone()[0]
+    conn.close()
+    if failures >= 5:
+        return "High"
+    elif failures >= 2:
+        return "Medium"
+    else:
+        return "Low"
+
+# === QR Content Generation ===
+def generate_qr_content(uid, item_type, vendor, lot, supply_date, warranty_end, manufactor_date, manufactor_number, notes, risk, vendor_risk,vendor_email=""):
+    qr_payload = {
+        "uid": uid,
+        "item_type": item_type,
+        "vendor": vendor,
+        "lot": lot,
+        "supply_date": supply_date,
+        "warranty_end": warranty_end,
+        "manufactor_date": manufactor_date,
+        "manufactor_number": manufactor_number,
+        "vendor_email": vendor_email,
+        "notes": notes,
+        "risk": risk,
+        "vendor_risk": vendor_risk,
+        
+    }
+    return json.dumps(qr_payload)
+
+# === helper to generate base64 inline QR for templates ===
+def generate_qr_image_base64(qr_content):
+    qr = qrcode.QRCode(box_size=8, border=2)
+    qr.add_data(qr_content)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    b64 = base64.b64encode(buf.read()).decode('ascii')
+    return b64
+
+# === Create anime-themed QR code with logo ===
+def create_anime_qr_with_logo(qr_content, logo_path=None):
+    """Create an anime-themed QR code with optional logo"""
+    try:
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_content)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+
+        # Apply anime-style effects if requested
+        img = apply_anime_effects(img)
+
+        # Add logo (logo is mandatory per your instruction)
+        if logo_path:
+            if os.path.exists(logo_path):
+                img = add_logo_to_qr(img, logo_path)
+            else:
+                print(f"[Logo] Logo file not found at {logo_path} (logo is required). Proceeding without visual logo overlay.")
+        return img
+    except Exception as e:
+        print(f"Anime QR creation failed: {e}")
+        return qrcode.make(qr_content).convert('RGB')
+
+def apply_anime_effects(img):
+    """Apply anime-style visual effects to the QR code"""
+    try:
+        img_array = np.array(img)
+        h, w = img_array.shape[:2]
+        for i in range(h):
+            for j in range(w):
+                if img_array[i, j, 0] < 128:  # Dark pixels
+                    if (i + j) % 4 == 0:
+                        img_array[i, j] = [50, 100, 200]
+                    elif (i + j) % 4 == 1:
+                        img_array[i, j] = [200, 100, 150]
+                else:
+                    img_array[i, j] = [245, 230, 240]
+        img = Image.fromarray(img_array.astype('uint8'))
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+        border_color = (255, 150, 200)
+        draw.rectangle([0, 0, width-1, height-1], outline=border_color, width=3)
+        corner_size = 15
+        for x, y in [(0, 0), (width-corner_size, 0), (0, height-corner_size), (width-corner_size, height-corner_size)]:
+            draw.ellipse([x, y, x+corner_size, y+corner_size], fill=border_color)
+        return img
+    except Exception as e:
+        print(f"Anime effects failed: {e}")
+        return img
+
+def add_logo_to_qr(qr_img, logo_path):
+    """Add logo to the center of QR code"""
+    try:
+        logo = Image.open(logo_path)
+        base_width = min(qr_img.size[0] // 5, qr_img.size[1] // 5)
+        wpercent = (base_width / float(logo.size[0]))
+        hsize = int((float(logo.size[1]) * float(wpercent)))
+        logo = logo.resize((base_width, hsize), Image.LANCZOS)
+
+        pos = ((qr_img.size[0] - logo.size[0]) // 2,
+               (qr_img.size[1] - logo.size[1]) // 2)
+
+        if logo.mode != 'RGBA':
+            logo = logo.convert('RGBA')
+
+        white_bg = Image.new('RGBA', logo.size, (255, 255, 255, 255))
+        white_bg.paste(logo, (0, 0), logo if logo.mode == 'RGBA' else None)
+
+        # Ensure QR image is RGBA to preserve transparency if merging
+        if qr_img.mode != 'RGBA':
+            qr_img = qr_img.convert('RGBA')
+        qr_img.paste(white_bg, pos, white_bg)
+        return qr_img.convert('RGB')
+    except Exception as e:
+        print(f"Logo addition failed: {e}")
+        return qr_img
+
+# === Centralized QR image saver (creates display + engrave) ===
+def save_qr_image(uid, qr_content):
+    """
+    Saves two QR images:
+    - <uid>_display.png (pink background + logo) for UI
+    - <uid>_engrave.png (white background + logo, 1-bit B/W) for laser engraving
+    Returns (display_path, engrave_path)
+    """
+    qr_path_display = os.path.join(qr_dir, f"{uid}_display.png")
+    qr_path_engrave = os.path.join(qr_dir, f"{uid}_engrave.png")
+
+    # Generate base QR
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(qr_content)
+    qr.make(fit=True)
+
+    # 1) Display QR (pink background)
+    try:
+        if USE_AI_QR:
+            # attempt an "artistic/anime" style first
+            img_disp = create_anime_qr_with_logo(qr_content, AI_QR_EMBED_IMAGE)
+        else:
+            img_disp = qr.make_image(fill_color="black", back_color="pink").convert("RGB")
+            if AI_QR_EMBED_IMAGE and os.path.exists(AI_QR_EMBED_IMAGE):
+                img_disp = add_logo_to_qr(img_disp, AI_QR_EMBED_IMAGE)
+        img_disp.save(qr_path_display)
+        print(f"[QR] Display QR saved at {qr_path_display}")
+    except Exception as e:
+        print(f"[save_qr_image] display generation failed: {e}")
+        img_disp = qr.make_image(fill_color="black", back_color="pink").convert("RGB")
+        if AI_QR_EMBED_IMAGE and os.path.exists(AI_QR_EMBED_IMAGE):
+            img_disp = add_logo_to_qr(img_disp, AI_QR_EMBED_IMAGE)
+        img_disp.save(qr_path_display)
+
+    # 2) Engrave QR (strict black/white, with logo area white to keep scannable)
+    try:
+        img_eng = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+        # Add logo (mandatory) on engrave image as well
+        if AI_QR_EMBED_IMAGE and os.path.exists(AI_QR_EMBED_IMAGE):
+            img_eng = add_logo_to_qr(img_eng, AI_QR_EMBED_IMAGE)
+        # Force strict B/W (1-bit) - helps reduce g-code size and ensures engraving clarity
+        img_eng = img_eng.convert("L").point(lambda p: 0 if p < 128 else 255, "1")
+        img_eng.save(qr_path_engrave)
+        print(f"[QR] Engrave QR saved at {qr_path_engrave}")
+    except Exception as e:
+        print(f"[save_qr_image] engrave generation failed: {e}")
+        img_eng = qr.make_image(fill_color="black", back_color="white").convert("L").point(lambda p: 0 if p < 128 else 255, "1")
+        img_eng.save(qr_path_engrave)
+
+    return qr_path_display, qr_path_engrave
+
+def generate_vendor_qr_content(vendor_data):
+    """Generate QR content for vendor details"""
+    qr_payload = {
+        "vendor_id": vendor_data['id'],
+        "company_name": vendor_data['company_name'],
+        "contact_person": vendor_data['contact_person'],
+        "email": vendor_data['email'],
+        "phone": vendor_data.get('phone', ''),
+        "address": vendor_data.get('address', ''),
+        "railway_zone": vendor_data.get('railway_zone', 'South Eastern Railway'),
+        "railway_division": vendor_data.get('railway_division', 'HWH Division'),
+        "supply_region": vendor_data.get('supply_region', 'West Bengal, India'),
+        "registration_date": vendor_data.get('registration_date', ''),
+        "vendor_risk": vendor_data.get('vendor_risk', 'Low')
+    }
+    return json.dumps(qr_payload)
+
+def save_vendor_qr_image(vendor_id, qr_content):
+    """Save vendor QR image for engraving"""
+    qr_path_engrave = os.path.join(vendor_qr_dir, f"vendor_{vendor_id}_engrave.png")
+    
+    # Generate QR code (simple black/white for engraving)
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(qr_content)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    
+    # Convert to 1-bit B/W for engraving
+    img = img.convert("L").point(lambda p: 0 if p < 128 else 255, "1")
+    img.save(qr_path_engrave)
+    
+    return qr_path_engrave
+
+# === QR -> G-code functions ===
+def qr_to_gcode_final(image_path, laser_power=255, travel_speed=5000, engrave_speed=1500, target_size_mm=25.0):
+    """
+    Vector-like approach: contour-following. Good for fewer G-lines but may produce complex paths.
+    """
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        return "G21\nG90\nM5\nG0 X0 Y0\n;(Error: Failed to load image)"
+    height, width = img.shape
+    scale_factor = target_size_mm / max(width, height)
+    _, thresh = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    min_contour_area = 5
+    significant_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_contour_area]
+    gcode_lines = ["G21", "G90", f"G0 F{travel_speed}", f"G1 F{engrave_speed}", "M3 S0", "G0 X0 Y0"]
+    for contour in significant_contours:
+        epsilon = 0.002 * cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, epsilon, True)
+        if len(approx) < 2:
+            continue
+        first_point = approx[0][0]
+        x_start = round(first_point[0] * scale_factor, 3)
+        y_start = round(first_point[1] * scale_factor, 3)
+        gcode_lines.append(f"G0 X{x_start} Y{y_start}")
+        gcode_lines.append(f"M3 S{laser_power}")
+        for point in approx[1:]:
+            x = round(point[0][0] * scale_factor, 3)
+            y = round(point[0][1] * scale_factor, 3)
+            gcode_lines.append(f"G1 X{x} Y{y}")
+        gcode_lines.append(f"G1 X{x_start} Y{y_start}")
+        gcode_lines.append("M3 S0")
+    gcode_lines.append("G0 X0 Y0")
+    gcode_lines.append("M5")
+    return "\n".join(gcode_lines)
+
+def qr_to_gcode_raster(img_path, laser_power=255, travel_speed=5000,
+                       engrave_speed=1500, target_size_mm=20.0):
+    """
+    Raster engraving: line-by-line (zig-zag) scan producing many lines but simpler control.
+    Produces denser G-code appropriate for raster engravers.
+    """
+    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        raise ValueError(f"Cannot load image: {img_path}")
+
+    # Binarize (black=0, white=255)
+    _, bw = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+
+    h, w = bw.shape
+    px_per_mm = w / target_size_mm
+    if px_per_mm == 0:
+        raise ValueError("Invalid scale: px_per_mm == 0")
+    mm_per_px = 1.0 / px_per_mm
+
+    gcode = []
+    gcode.append("G21 ; mm mode")
+    gcode.append("G90 ; absolute positioning")
+    gcode.append("M5  ; laser off")
+    gcode.append(f"G0 F{travel_speed}")
+
+    # iterate rows, zigzag pattern
+    for row in range(h):
+        y_mm = round(row * mm_per_px, 3)
+        # choose forward/backwards scanning
+        if row % 2 == 0:
+            col_iter = range(w)
+        else:
+            col_iter = range(w-1, -1, -1)
+
+        laser_on = False
+        for col in col_iter:
+            pixel = bw[row, col]
+            x_mm = round(col * mm_per_px, 3)
+            if pixel == 0:  # black pixel to engrave
+                if not laser_on:
+                    gcode.append(f"G0 X{x_mm} Y{y_mm} F{travel_speed}")
+                    gcode.append(f"M3 S{laser_power}")
+                    laser_on = True
+                gcode.append(f"G1 X{x_mm} Y{y_mm} F{engrave_speed}")
+            else:
+                if laser_on:
+                    gcode.append("M5")
+                    laser_on = False
+
+        if laser_on:
+            gcode.append("M5")
+            laser_on = False
+
+    gcode.append("M5 ; ensure laser off")
+    gcode.append("G0 X0 Y0 ; go home")
+    return "\n".join(gcode)
+
+def qr_to_gcode_fallback(image_path, laser_power=255, scale=1.0):
+    # Simple horizontal-run fallback scanning
+    img = Image.open(image_path).convert("L")
+    width, height = img.size
+    pixels = img.load()
+    gcode_lines = ["G21 ; Set units to mm", "G90 ; Absolute positioning", "M3 S0 ; Laser off at start"]
+    for y in range(height):
+        x = 0
+        while x < width:
+            while x < width and pixels[x, y] >= 128:
+                x += 1
+            if x >= width:
+                break
+            start_x = x
+            while x < width and pixels[x, y] < 128:
+                x += 1
+            end_x = x - 1
+            gx_start = round(start_x * scale, 3)
+            gy = round(y * scale, 3)
+            gx_end = round(end_x * scale, 3)
+            gcode_lines.append(f"G0 X{gx_start} Y{gy}")
+            gcode_lines.append(f"M3 S{laser_power}")
+            gcode_lines.append(f"G1 X{gx_end} Y{gy}")
+            gcode_lines.append("M3 S0")
+    gcode_lines.append("M5 ; Laser off at end")
+    gcode_lines.append("G0 X0 Y0 ; Return to origin")
+    return "\n".join(gcode_lines)
+
+# === Send G-code to ESP32 over WebSocket ===
+async def send_gcode_websocket(gcode_text, command_delay=0.02):
+    try:
+        async with websockets.connect(ESP32_WS) as websocket:
+            # Optionally read an initial greeting from ESP32
+            try:
+                first_msg = await asyncio.wait_for(websocket.recv(), timeout=1.0)
+                print(f"ESP32 says: {first_msg}")
+            except Exception:
+                pass
+
+            lines = [line.strip() for line in gcode_text.splitlines() if line.strip() and not line.lstrip().startswith(';')]
+            total = len(lines)
+            success_count = 0
+
+            for i, line in enumerate(lines):
+                await websocket.send(line)
+                try:
+                    ack = await asyncio.wait_for(websocket.recv(), timeout=1.0)
+                    if "ok" in ack.lower() or "ready" in ack.lower():
+                        success_count += 1
+                    else:
+                        print(f"Unexpected ACK: {ack}")
+                except asyncio.TimeoutError:
+                    # no ack — we still proceed but log
+                    print(f"No ACK for: {line[:80]}")
+                if i % 100 == 0:
+                    print(f"Progress: {i}/{total} lines sent")
+                await asyncio.sleep(command_delay)
+
+            rate = (success_count / total) * 100 if total else 100.0
+            return rate > 90, f"Sent {success_count}/{total} ({rate:.1f}%)"
+    except Exception as e:
+        return False, f"WebSocket error: {e}"
+
+def send_gcode_to_esp32_enhanced(gcode_text):
+    """Wrapper so Flask can call the async WebSocket sender and returns (success_bool, message)."""
+    try:
+        return asyncio.run(send_gcode_websocket(gcode_text))
+    except Exception as e:
+        print(f"[send_gcode_to_esp32_enhanced] Exception: {e}")
+        return False, f"Async send failed: {e}"
+
+
+def vendor_qr_to_gcode_raster(img_path, laser_power=255, travel_speed=5000,
+                              engrave_speed=1500, target_size_mm=25.0):
+    """
+    Raster engraving for vendor QR codes: line-by-line (zig-zag) scan.
+    """
+    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        raise ValueError(f"Cannot load image: {img_path}")
+
+    # Binarize (black=0, white=255)
+    _, bw = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+
+    h, w = bw.shape
+    px_per_mm = w / target_size_mm
+    if px_per_mm == 0:
+        raise ValueError("Invalid scale: px_per_mm == 0")
+    mm_per_px = 1.0 / px_per_mm
+
+    gcode = []
+    gcode.append("G21 ; mm mode")
+    gcode.append("G90 ; absolute positioning")
+    gcode.append("M5  ; laser off")
+    gcode.append(f"G0 F{travel_speed}")
+
+    # iterate rows, zigzag pattern
+    for row in range(h):
+        y_mm = round(row * mm_per_px, 3)
+        # choose forward/backwards scanning
+        if row % 2 == 0:
+            col_iter = range(w)
+        else:
+            col_iter = range(w-1, -1, -1)
+
+        laser_on = False
+        for col in col_iter:
+            pixel = bw[row, col]
+            x_mm = round(col * mm_per_px, 3)
+            if pixel == 0:  # black pixel to engrave
+                if not laser_on:
+                    gcode.append(f"G0 X{x_mm} Y{y_mm} F{travel_speed}")
+                    gcode.append(f"M3 S{laser_power}")
+                    laser_on = True
+                gcode.append(f"G1 X{x_mm} Y{y_mm} F{engrave_speed}")
+            else:
+                if laser_on:
+                    gcode.append("M5")
+                    laser_on = False
+
+        if laser_on:
+            gcode.append("M5")
+            laser_on = False
+
+    gcode.append("M5 ; ensure laser off")
+    gcode.append("G0 X0 Y0 ; go home")
+    return "\n".join(gcode)
+
+def vendor_qr_to_gcode_vector(image_path, laser_power=255, travel_speed=5000, 
+                              engrave_speed=1500, target_size_mm=25.0):
+    """
+    Vector-like approach for vendor QR codes: contour-following.
+    """
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        return "G21\nG90\nM5\nG0 X0 Y0\n;(Error: Failed to load image)"
+    height, width = img.shape
+    scale_factor = target_size_mm / max(width, height)
+    _, thresh = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    min_contour_area = 5
+    significant_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_contour_area]
+    gcode_lines = ["G21", "G90", f"G0 F{travel_speed}", f"G1 F{engrave_speed}", "M3 S0", "G0 X0 Y0"]
+    for contour in significant_contours:
+        epsilon = 0.002 * cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, epsilon, True)
+        if len(approx) < 2:
+            continue
+        first_point = approx[0][0]
+        x_start = round(first_point[0] * scale_factor, 3)
+        y_start = round(first_point[1] * scale_factor, 3)
+        gcode_lines.append(f"G0 X{x_start} Y{y_start}")
+        gcode_lines.append(f"M3 S{laser_power}")
+        for point in approx[1:]:
+            x = round(point[0][0] * scale_factor, 3)
+            y = round(point[0][1] * scale_factor, 3)
+            gcode_lines.append(f"G1 X{x} Y{y}")
+        gcode_lines.append(f"G1 X{x_start} Y{y_start}")
+        gcode_lines.append("M3 S0")
+    gcode_lines.append("G0 X0 Y0")
+    gcode_lines.append("M5")
+    return "\n".join(gcode_lines)
+
+@app.route('/vendor/login', methods=['GET', 'POST'])
+def vendor_login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        
+        conn = get_vendor_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT * FROM vendors WHERE email=?", (email,))
+        vendor = c.fetchone()
+        conn.close()
+        
+        if vendor:
+            # Convert sqlite3.Row to dictionary properly
+            vendor_dict = {key: vendor[key] for key in vendor.keys()}
+            
+            if verify_password(vendor_dict['password'], password):
+                # Set session variables
+                session['vendor_id'] = vendor_dict['id']
+                session['vendor_name'] = vendor_dict['company_name']
+                return redirect(url_for('vendor_dashboard'))
+        
+        return render_template('vendor_login.html', error="Invalid credentials")
+    
+    return render_template('vendor_login.html')
+
+@app.route('/vendor/register', methods=['GET', 'POST'])
+def vendor_register():
+    if request.method == 'POST':
+        company_name = request.form['company_name']
+        contact_person = request.form['contact_person']
+        email = request.form['email']
+        password = request.form['password']
+        phone = request.form.get('phone', '')
+        address = request.form.get('address', '')
+        railway_zone = request.form.get('railway_zone', 'South Eastern Railway').strip() or 'South Eastern Railway'
+        railway_division = request.form.get('railway_division', 'HWH Division').strip() or 'HWH Division'
+        supply_region = request.form.get('supply_region', 'West Bengal, India').strip() or 'West Bengal, India'
+        
+        hashed_pw = hash_password(password)
+        registration_date = datetime.now().strftime("%Y-%m-%d")
+        
+        try:
+            conn = sqlite3.connect(VENDOR_DB)
+            c = conn.cursor()
+            c.execute('''INSERT INTO vendors 
+                        (company_name, contact_person, email, password, phone, address,
+                         railway_zone, railway_division, supply_region, registration_date)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                     (company_name, contact_person, email, hashed_pw, phone, address,
+                      railway_zone, railway_division, supply_region, registration_date))
+            conn.commit()
+            conn.close()
+            
+            return redirect(url_for('vendor_login'))
+        except sqlite3.IntegrityError:
+            return render_template('vendor_registration.html', error="Email already registered")
+    
+    return render_template('vendor_registration.html')
+
+@app.route('/vendor/dashboard')
+def vendor_dashboard():
+    if 'vendor_id' not in session:
+        return redirect(url_for('vendor_login'))
+    
+    vendor_id = session['vendor_id']
+    
+    # Get vendor details
+    conn = get_vendor_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+    vendor = c.fetchone()
+    conn.close()
+    
+    if not vendor:
+        return redirect(url_for('vendor_logout'))
+    
+    # Convert to dictionary properly
+    vendor_dict = {key: vendor[key] for key in vendor.keys()}
+    
+    # Get vendor's products from fittings database
+    conn_fittings = get_db_connection()
+    c_fittings = conn_fittings.cursor()
+    c_fittings.execute("SELECT * FROM fittings WHERE vendor_id=?", (vendor_id,))
+    products = [{key: row[key] for key in row.keys()} for row in c_fittings.fetchall()]
+    c_fittings.execute("""
+        SELECT o.order_no, o.customer_name, o.status, o.created_at,
+               i.uid, i.product_name, i.quantity, i.line_total
+        FROM marketplace_order_items i
+        JOIN marketplace_orders o ON o.id = i.order_id
+        WHERE i.vendor_id=? OR i.vendor=?
+        ORDER BY o.created_at DESC
+        LIMIT 25
+    """, (str(vendor_id), vendor_dict['company_name']))
+    orders = [{key: row[key] for key in row.keys()} for row in c_fittings.fetchall()]
+    conn_fittings.close()
+    review_data = vendor_review_summary(vendor_id)
+    revenue_series = vendor_revenue_series(vendor_id, vendor_dict['company_name'])
+    
+    # Generate vendor QR content
+    vendor_qr_content = generate_vendor_qr_content(vendor_dict)
+    vendor_qr_b64 = generate_qr_image_base64(vendor_qr_content)
+    
+    return render_template('vendor_dashboard.html', 
+                          vendor=vendor_dict, 
+                          products=products,
+                          orders=orders,
+                          review_data=review_data,
+                          revenue_series=revenue_series,
+                          vendor_qr_code=vendor_qr_b64)
+
+@app.route('/vendor/qr/<vendor_id>')
+def download_vendor_qr(vendor_id):
+    if 'vendor_id' not in session or session['vendor_id'] != int(vendor_id):
+        return redirect(url_for('vendor_login'))
+    
+    conn = get_vendor_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+    vendor_row = c.fetchone()
+    conn.close()
+    
+    if not vendor_row:
+        return "Vendor not found", 404
+    vendor = {key: vendor_row[key] for key in vendor_row.keys()}
+    
+    vendor_qr_content = generate_vendor_qr_content(vendor)
+    qr_path = save_vendor_qr_image(vendor_id, vendor_qr_content)
+    
+    return send_file(qr_path, as_attachment=True, download_name=f"vendor_{vendor_id}_qr.png")
+
+@app.route('/vendor/<vendor_id>')
+def vendor_details(vendor_id):
+    conn = get_vendor_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+    vendor = c.fetchone()
+    conn.close()
+    
+    if not vendor:
+        return "Vendor not found", 404
+    
+    # Convert to dictionary properly
+    vendor_dict = {key: vendor[key] for key in vendor.keys()}
+    
+    # Get vendor's products
+    conn_fittings = get_db_connection()
+    c_fittings = conn_fittings.cursor()
+    c_fittings.execute("SELECT * FROM fittings WHERE vendor_id=?", (vendor_id,))
+    products = [{key: row[key] for key in row.keys()} for row in c_fittings.fetchall()]
+    conn_fittings.close()
+    review_data = vendor_review_summary(vendor_id)
+    revenue_series = vendor_revenue_series(vendor_id, vendor_dict['company_name'])
+    
+    return render_template(
+        'vendor_details.html',
+        vendor=vendor_dict,
+        products=products,
+        review_data=review_data,
+        revenue_series=revenue_series
+    )
+
+@app.route('/vendor/<int:vendor_id>/reviews', methods=['POST'])
+def add_vendor_review(vendor_id):
+    reviewer_name = request.form.get('reviewer_name', '').strip() or 'Railway Procurement Team'
+    railway_unit = request.form.get('railway_unit', '').strip() or 'HWH Division'
+    comment = request.form.get('comment', '').strip()
+    rating = min(max(parse_int(request.form.get('rating'), 5), 1), 5)
+
+    conn = get_vendor_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT id FROM vendors WHERE id=?", (vendor_id,))
+    if not c.fetchone():
+        conn.close()
+        return "Vendor not found", 404
+    c.execute("""
+        INSERT INTO vendor_reviews (vendor_id, reviewer_name, railway_unit, rating, comment, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (vendor_id, reviewer_name, railway_unit, rating, comment, datetime.now().isoformat(timespec='seconds')))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('vendor_details', vendor_id=vendor_id))
+
+@app.route('/vendor/gcode/<int:vendor_id>')
+def download_vendor_gcode(vendor_id):
+    """Download vendor QR G-code file (no login required)"""
+    
+    # Get vendor details
+    conn = get_vendor_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+    vendor = c.fetchone()
+    
+    if not vendor:
+        conn.close()
+        return "Vendor not found", 404
+
+    # Get column names from cursor description
+    columns = [col[0] for col in c.description]
+
+    # Build dict safely regardless of tuple or sqlite3.Row
+    vendor_dict = {col: vendor[idx] for idx, col in enumerate(columns)}
+    conn.close()
+
+    print(f"[Vendor G-code] vendor type = {type(vendor)}")
+    print(f"[Vendor G-code] vendor raw = {vendor}")
+    print(f"[Vendor G-code] vendor_dict = {vendor_dict}")
+
+    # Generate QR content + image
+    try:
+        vendor_qr_content = generate_vendor_qr_content(vendor_dict)
+        qr_path = save_vendor_qr_image(vendor_id, vendor_qr_content)
+        print(f"[Vendor G-code] QR saved at {qr_path}")
+    except Exception as e:
+        print(f"[Vendor G-code] QR generation failed: {e}")
+        return f"QR generation failed: {e}", 500
+
+    # Generate G-code
+    try:
+        gcode_text = vendor_qr_to_gcode_raster(
+            qr_path,
+            laser_power=255,
+            travel_speed=5000,
+            engrave_speed=1500,
+            target_size_mm=25.0
+        )
+        print(f"[Vendor G-code] G-code length = {len(gcode_text)} chars")
+    except Exception as e:
+        print(f"[Vendor G-code] Failed: {e}")
+        return f"G-code generation failed: {e}", 500
+
+    # Serve file
+    mem_file = io.BytesIO()
+    mem_file.write(gcode_text.encode('utf-8'))
+    mem_file.seek(0)
+
+    return send_file(
+        mem_file,
+        as_attachment=True,
+        download_name=f"vendor_{vendor_id}_engrave.gcode",
+        mimetype='text/plain'
+    )
+
+
+
+
+# === Flask routes (main app) ===
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    error = None
+    
+    # Get all vendors for the dropdown using the proper connection function
+    conn = get_vendor_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, company_name FROM vendors ORDER BY company_name")
+    vendor_rows = c.fetchall()
+    conn.close()
+    
+    # Convert sqlite3.Row objects to dictionaries
+    vendors = [{key: row[key] for key in row.keys()} for row in vendor_rows] if vendor_rows else []
+    
+    if request.method == 'POST':
+        uid = request.form['uid']
+        item_type = request.form['item_type']
+        vendor = request.form['vendor']
+        vendor_id = request.form.get('vendor_id', '')
+        lot = request.form['lot']
+        supply_date = request.form['supply_date']
+        warranty_end = request.form['warranty_end']
+        manufactor_date = request.form.get('manufactor_date', '')
+        manufactor_number = request.form.get('manufactor_number', '')
+        notes = request.form.get('notes', '')
+        vendor_email = request.form.get('vendor_email','')
+        category = request.form.get('category', 'Rail Components').strip() or 'Rail Components'
+        price = parse_money(request.form.get('price'))
+        discount = min(parse_money(request.form.get('discount')), 100.0)
+        stock = parse_int(request.form.get('stock'))
+
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT * FROM fittings WHERE uid=?", (uid,))
+        if c.fetchone():
+            conn.close()
+            error = "UID already exists!"
+            return render_template('index.html', error=error, request=request, vendors=vendors)
+
+        inspection_date = None
+        repair_date = None
+        risk_level = "Low"
+        vendor_risk = "Low"
+
+        try:
+            payload = {
+                "uid": uid, "item_type": item_type, "vendor": vendor, "lot": lot,
+                "supply_date": supply_date, "warranty_end": warranty_end, "notes": notes
+            }
+            risk_level = get_risk_level(payload)
+            vendor_risk = calculate_vendor_risk(vendor)
+        except Exception as e:
+            print(f"[Risk Calculation] Exception: {e}")
+
+        try:
+            inspection_date, repair_date = calculate_dates(manufactor_date, supply_date, warranty_end, risk_level)
+        except Exception as e:
+            print(f"[Date Calculation] Exception: {e}")
+            inspection_date = supply_date or datetime.today().strftime("%Y-%m-%d")
+            repair_date = warranty_end or datetime.today().strftime("%Y-%m-%d")
+
+        qr_content = generate_qr_content(
+            uid, item_type, vendor, lot, supply_date, warranty_end,
+            manufactor_date, manufactor_number, notes, risk_level, vendor_risk,vendor_email
+        )
+
+        # returns (display_path, engrave_path)
+        qr_display_path, qr_engrave_path = save_qr_image(uid, qr_content)
+
+        try:
+            # Convert empty vendor_id to None for database
+            vendor_id_db = int(vendor_id) if vendor_id else None
+            
+            # FIXED INSERT STATEMENT - removed trailing comma and added vendor_email parameter
+            c.execute("""INSERT INTO fittings 
+                (uid, item_type, vendor, vendor_id, lot, supply_date, warranty, warranty_end, 
+                 manufactor_date, manufactor_number, notes, udm_synced, tms_synced, 
+                 risk_flag, risk, vendor_risk, vendor_email, inspection_date, repair_date,
+                 category, price, discount, stock)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (uid, item_type, vendor, vendor_id_db, lot, supply_date, supply_date, warranty_end,
+                 manufactor_date, manufactor_number, notes,
+                 1 if risk_level == "High" else 0, risk_level, vendor_risk, vendor_email,
+                 inspection_date, repair_date, category, price, discount, stock)
+            )
+            conn.commit()
+        except ValueError:
+            # Handle case where vendor_id is not a valid integer
+            c.execute("""INSERT INTO fittings 
+                (uid, item_type, vendor, vendor_id, lot, supply_date, warranty, warranty_end, 
+                 manufactor_date, manufactor_number, notes, udm_synced, tms_synced, 
+                 risk_flag, risk, vendor_risk, vendor_email, inspection_date, repair_date,
+                 category, price, discount, stock)
+                VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (uid, item_type, vendor, lot, supply_date, supply_date, warranty_end,
+                 manufactor_date, manufactor_number, notes,
+                 1 if risk_level == "High" else 0, risk_level, vendor_risk, vendor_email,
+                 inspection_date, repair_date, category, price, discount, stock)
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"[DB Insert] Exception: {e}")
+            conn.close()
+            error = "Database insert failed."
+            return render_template('index.html', error=error, request=request, vendors=vendors)
+        conn.close()
+
+        try:
+            update_all_risks()
+        except Exception as e:
+            print(f"[Global Risk Update] Exception: {e}")
+
+        # push to remote systems (best-effort)
+        try:
+            payload["repair_date"] = repair_date
+            payload["inspection_date"] = inspection_date
+            payload["risk"] = risk_level
+            payload["vendor_risk"] = vendor_risk
+            payload["vendor_email"] = vendor_email
+            if push_to_udm(payload):
+                conn = get_db_connection()
+                c = conn.cursor()
+                c.execute("UPDATE fittings SET udm_synced=1 WHERE uid=?", (uid,))
+                conn.commit()
+                conn.close()
+        except Exception as e:
+            print(f"[UDM Push] Exception: {e}")
+
+        try:
+            if push_to_tms(payload):
+                conn = get_db_connection()
+                c = conn.cursor()
+                c.execute("UPDATE fittings SET tms_synced=1 WHERE uid=?", (uid,))
+                conn.commit()
+                conn.close()
+        except Exception as e:
+            print(f"[TMS Push] Exception: {e}")
+
+        return redirect(url_for('view_record', uid=uid))
+
+    return render_template('index.html', error=error, request=request, vendors=vendors)
+
+@app.route('/vendor/logout')
+def vendor_logout():
+    """Log out the vendor by clearing the session"""
+    session.clear()
+    return redirect(url_for('vendor_login'))
+
+@app.route('/all')
+def view_all():
+    sort_by = request.args.get('sort_by', 'uid')
+    valid_columns = ['uid', 'lot', 'supply_date', 'warranty_end', 'manufactor_date', 
+                     'manufactor_number', 'vendor', 'risk', 'item_type', 'vendor_risk',
+                     'category', 'price', 'stock']
+    if sort_by not in valid_columns:
+        sort_by = 'uid'
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute(f"SELECT * FROM fittings ORDER BY {sort_by} ASC")
+    rows = c.fetchall()
+    conn.close()
+
+    data = []
+    for row in rows:
+        # Convert sqlite3.Row to dictionary properly
+        row_dict = {key: row[key] for key in row.keys()}
+        row_dict['next_inspection'] = compute_next_inspection(
+            row_dict.get('inspection_date'), 
+            row_dict.get('repair_date'), 
+            row_dict.get('risk')
+        )
+        data.append(row_dict)
+
+    return render_template('all.html', rows=data, sort_by=sort_by)
+
+@app.route('/products/<uid>/marketplace', methods=['POST'])
+def update_marketplace_settings(uid):
+    category = request.form.get('category', 'Rail Components').strip() or 'Rail Components'
+    price = parse_money(request.form.get('price'))
+    discount = min(parse_money(request.form.get('discount')), 100.0)
+    stock = parse_int(request.form.get('stock'))
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT vendor_id FROM fittings WHERE uid=?", (uid,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return "Product not found", 404
+
+    owner_id = row['vendor_id']
+    if session.get('vendor_id') and owner_id and str(session['vendor_id']) != str(owner_id):
+        conn.close()
+        return "You cannot edit another seller's marketplace settings.", 403
+
+    c.execute("""
+        UPDATE fittings
+        SET category=?, price=?, discount=?, stock=?
+        WHERE uid=?
+    """, (category, price, discount, stock, uid))
+    conn.commit()
+    conn.close()
+
+    return redirect(request.referrer or url_for('view_record', uid=uid, msg="Marketplace settings updated."))
+
+@app.route('/shop')
+def shop():
+    query = request.args.get('q', '').strip()
+    category = request.args.get('category', '').strip()
+    sort_by = request.args.get('sort', 'latest')
+
+    where = ["1=1"]
+    params = []
+    if query:
+        where.append("(uid LIKE ? OR item_type LIKE ? OR vendor LIKE ? OR category LIKE ?)")
+        params.extend([f"%{query}%"] * 4)
+    if category:
+        where.append("category = ?")
+        params.append(category)
+
+    sort_options = {
+        "price_low": "price ASC",
+        "price_high": "price DESC",
+        "stock": "stock DESC",
+        "risk": "risk ASC",
+        "latest": "supply_date DESC, uid DESC",
+    }
+    order_by = sort_options.get(sort_by, sort_options["latest"])
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute(f"SELECT * FROM fittings WHERE {' AND '.join(where)} ORDER BY {order_by}", params)
+    products = []
+    for row in c.fetchall():
+        product = {key: row[key] for key in row.keys()}
+        product['sale_price'] = selling_price(product)
+        product['review_summary'] = product_review_summary(product['uid'])
+        product['vendor_review_summary'] = {"avg": 0, "count": 0}
+        if product.get('vendor_id'):
+            product['vendor_review_summary'] = vendor_review_summary(product['vendor_id'])
+        products.append(product)
+    conn.close()
+
+    conn_v = get_vendor_db_connection()
+    vendor_lookup = {
+        str(row['id']): {key: row[key] for key in row.keys()}
+        for row in conn_v.execute("SELECT id, railway_zone, railway_division, supply_region FROM vendors").fetchall()
+    }
+    conn_v.close()
+    for product in products:
+        vendor_meta = vendor_lookup.get(str(product.get('vendor_id')), {})
+        product['railway_zone'] = vendor_meta.get('railway_zone', 'South Eastern Railway')
+        product['railway_division'] = vendor_meta.get('railway_division', 'HWH Division')
+        product['supply_region'] = vendor_meta.get('supply_region', 'West Bengal, India')
+
+    return render_template(
+        'shop.html',
+        products=products,
+        categories=marketplace_categories(),
+        query=query,
+        category=category,
+        sort_by=sort_by,
+        cart_count=sum(get_cart().values())
+    )
+
+@app.route('/cart')
+def cart():
+    items, totals = load_cart_items()
+    return render_template('cart.html', items=items, totals=totals)
+
+@app.route('/cart/add/<uid>', methods=['POST'])
+def add_to_cart(uid):
+    quantity = parse_int(request.form.get('quantity'), 1) or 1
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT stock FROM fittings WHERE uid=?", (uid,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return "Product not found", 404
+
+    stock = parse_int(row['stock'])
+    if stock <= 0:
+        return redirect(url_for('shop'))
+
+    cart_data = get_cart()
+    cart_data[uid] = min(cart_data.get(uid, 0) + quantity, stock)
+    save_cart(cart_data)
+    return redirect(request.referrer or url_for('cart'))
+
+@app.route('/cart/update', methods=['POST'])
+def update_cart():
+    cart_data = get_cart()
+    for uid, quantity in request.form.items():
+        if not uid.startswith('quantity_'):
+            continue
+        product_uid = uid.replace('quantity_', '', 1)
+        next_qty = parse_int(quantity)
+        if next_qty <= 0:
+            cart_data.pop(product_uid, None)
+        else:
+            cart_data[product_uid] = next_qty
+    save_cart(cart_data)
+    return redirect(url_for('cart'))
+
+@app.route('/cart/remove/<uid>', methods=['POST'])
+def remove_from_cart(uid):
+    cart_data = get_cart()
+    cart_data.pop(uid, None)
+    save_cart(cart_data)
+    return redirect(url_for('cart'))
+
+@app.route('/checkout', methods=['GET', 'POST'])
+def checkout():
+    items, totals = load_cart_items()
+    if not items:
+        return redirect(url_for('shop'))
+
+    if request.method == 'POST':
+        customer_name = request.form.get('customer_name', '').strip()
+        customer_email = request.form.get('customer_email', '').strip()
+        customer_phone = request.form.get('customer_phone', '').strip()
+        shipping_address = request.form.get('shipping_address', '').strip()
+        payment_method = request.form.get('payment_method', 'COD').strip()
+
+        if not customer_name or not customer_email or not shipping_address:
+            return render_template('checkout.html', items=items, totals=totals, error="Name, email, and shipping address are required.")
+
+        conn = get_db_connection()
+        try:
+            c = conn.cursor()
+            for item in items:
+                c.execute("SELECT stock FROM fittings WHERE uid=?", (item['uid'],))
+                stock_row = c.fetchone()
+                if not stock_row or parse_int(stock_row['stock']) < item['quantity']:
+                    conn.close()
+                    return render_template('checkout.html', items=items, totals=totals, error=f"{item['item_type']} does not have enough stock.")
+
+            order_no = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3).upper()}"
+            c.execute("""
+                INSERT INTO marketplace_orders
+                (order_no, customer_name, customer_email, customer_phone, shipping_address,
+                 payment_method, status, subtotal, discount_total, tax_total, shipping_total,
+                 grand_total, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'Placed', ?, ?, ?, ?, ?, ?)
+            """, (
+                order_no, customer_name, customer_email, customer_phone, shipping_address,
+                payment_method, totals['subtotal'], totals['discount_total'], totals['tax_total'],
+                totals['shipping_total'], totals['grand_total'], datetime.now().isoformat(timespec='seconds')
+            ))
+            order_id = c.lastrowid
+
+            for item in items:
+                c.execute("""
+                    INSERT INTO marketplace_order_items
+                    (order_id, uid, vendor_id, product_name, vendor, unit_price, quantity, line_total)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    order_id, item['uid'], item.get('vendor_id'), item['item_type'], item.get('vendor'),
+                    item['sale_price'], item['quantity'], item['line_total']
+                ))
+                c.execute("UPDATE fittings SET stock = MAX(COALESCE(stock, 0) - ?, 0) WHERE uid=?", (item['quantity'], item['uid']))
+
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            print(f"[Checkout] Exception: {e}")
+            return render_template('checkout.html', items=items, totals=totals, error="Checkout failed. Please try again.")
+        conn.close()
+
+        save_cart({})
+        return redirect(url_for('order_success', order_no=order_no))
+
+    return render_template('checkout.html', items=items, totals=totals)
+
+@app.route('/orders/<order_no>')
+def order_success(order_no):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM marketplace_orders WHERE order_no=?", (order_no,))
+    order = c.fetchone()
+    if not order:
+        conn.close()
+        return "Order not found", 404
+    c.execute("SELECT * FROM marketplace_order_items WHERE order_id=?", (order['id'],))
+    items = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
+    order_data = {key: order[key] for key in order.keys()}
+    conn.close()
+    return render_template('order_success.html', order=order_data, items=items)
+
+@app.route('/track', methods=['GET', 'POST'])
+def track_order():
+    order = None
+    items = []
+    error = None
+    if request.method == 'POST':
+        order_no = request.form.get('order_no', '').strip()
+        email = request.form.get('customer_email', '').strip()
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(
+            "SELECT * FROM marketplace_orders WHERE order_no=? AND customer_email=?",
+            (order_no, email)
+        )
+        row = c.fetchone()
+        if row:
+            order = {key: row[key] for key in row.keys()}
+            c.execute("SELECT * FROM marketplace_order_items WHERE order_id=?", (order['id'],))
+            items = [{key: item[key] for key in item.keys()} for item in c.fetchall()]
+        else:
+            error = "No order found for that order number and email."
+        conn.close()
+    return render_template('track.html', order=order, items=items, error=error)
+
+@app.route('/vendor/order/<order_no>/status', methods=['POST'])
+def update_order_status(order_no):
+    if 'vendor_id' not in session:
+        return redirect(url_for('vendor_login'))
+
+    next_status = request.form.get('status', 'Placed')
+    allowed = {'Placed', 'Accepted', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Completed', 'Cancelled'}
+    if next_status not in allowed:
+        next_status = 'Placed'
+
+    vendor_id = str(session['vendor_id'])
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT o.id
+        FROM marketplace_orders o
+        JOIN marketplace_order_items i ON i.order_id = o.id
+        WHERE o.order_no=? AND i.vendor_id=?
+        LIMIT 1
+    """, (order_no, vendor_id))
+    owned = c.fetchone()
+    if owned:
+        c.execute("UPDATE marketplace_orders SET status=? WHERE order_no=?", (next_status, order_no))
+        conn.commit()
+    conn.close()
+    return redirect(url_for('vendor_dashboard', msg=f"Order {order_no} updated."))
+
+@app.route('/reviews/<uid>', methods=['POST'])
+def add_review(uid):
+    customer_name = request.form.get('customer_name', '').strip()
+    comment = request.form.get('comment', '').strip()
+    rating = parse_int(request.form.get('rating'), 5)
+    rating = min(max(rating, 1), 5)
+
+    if not customer_name:
+        customer_name = "Customer"
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT uid FROM fittings WHERE uid=?", (uid,))
+    if not c.fetchone():
+        conn.close()
+        return "Product not found", 404
+    c.execute("""
+        INSERT INTO marketplace_reviews (uid, customer_name, rating, comment, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (uid, customer_name, rating, comment, datetime.now().isoformat(timespec='seconds')))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('view_record', uid=uid, msg="Review added."))
+
+@app.route('/admin')
+def admin_dashboard():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*), COALESCE(SUM(grand_total), 0) FROM marketplace_orders")
+    order_count, revenue = c.fetchone()
+    c.execute("SELECT COUNT(*) FROM fittings")
+    product_count = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM fittings WHERE COALESCE(stock, 0) <= 5")
+    low_stock_count = c.fetchone()[0]
+    c.execute("SELECT status, COUNT(*) FROM marketplace_orders GROUP BY status ORDER BY status")
+    status_counts = c.fetchall()
+    c.execute("""
+        SELECT o.order_no, o.customer_name, o.status, o.grand_total, o.created_at
+        FROM marketplace_orders o
+        ORDER BY o.created_at DESC
+        LIMIT 20
+    """)
+    recent_orders = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
+    c.execute("""
+        SELECT category, COUNT(*) AS product_count, COALESCE(SUM(stock), 0) AS stock_count
+        FROM fittings
+        GROUP BY category
+        ORDER BY product_count DESC
+        LIMIT 8
+    """)
+    categories = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
+    conn.close()
+
+    conn_v = get_vendor_db_connection()
+    seller_count = conn_v.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
+    division_rows = conn_v.execute("""
+        SELECT railway_zone, railway_division, supply_region, COUNT(*) AS seller_count
+        FROM vendors
+        GROUP BY railway_zone, railway_division, supply_region
+        ORDER BY seller_count DESC
+    """).fetchall()
+    divisions = [{key: row[key] for key in row.keys()} for row in division_rows]
+    conn_v.close()
+
+    return render_template(
+        'admin.html',
+        order_count=order_count,
+        revenue=revenue,
+        product_count=product_count,
+        low_stock_count=low_stock_count,
+        seller_count=seller_count,
+        status_counts=status_counts,
+        recent_orders=recent_orders,
+        categories=categories,
+        divisions=divisions
+    )
+
+@app.route('/generated/qrcodes/<path:filename>')
+def generated_qrcode(filename):
+    safe_name = os.path.basename(filename)
+    runtime_file = os.path.join(qr_dir, safe_name)
+    bundled_file = os.path.join(BASE_DIR, "static", "qrcodes", safe_name)
+    if os.path.exists(runtime_file):
+        return send_file(runtime_file)
+    if os.path.exists(bundled_file):
+        return send_file(bundled_file)
+    return "QR image not found", 404
+
+@app.route('/generated/vendor_qrcodes/<path:filename>')
+def generated_vendor_qrcode(filename):
+    safe_name = os.path.basename(filename)
+    runtime_file = os.path.join(vendor_qr_dir, safe_name)
+    bundled_file = os.path.join(BASE_DIR, "static", "vendor_qrcodes", safe_name)
+    if os.path.exists(runtime_file):
+        return send_file(runtime_file)
+    if os.path.exists(bundled_file):
+        return send_file(bundled_file)
+    return "Vendor QR image not found", 404
+
+
+@app.route('/view/<uid>')
+def view_record(uid):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM fittings WHERE uid=?", (uid,))
+    row = c.fetchone()
+    
+    if not row:
+        conn.close()
+        return "Not found", 404
+    
+    # Convert sqlite3.Row to dictionary properly
+    row_dict = {key: row[key] for key in row.keys()}
+    c.execute("SELECT * FROM marketplace_reviews WHERE uid=? ORDER BY created_at DESC", (uid,))
+    reviews = [{key: review[key] for key in review.keys()} for review in c.fetchall()]
+    conn.close()
+    
+    return render_template(
+        'view.html',
+        row=row_dict,
+        reviews=reviews,
+        review_summary=product_review_summary(uid),
+        message=request.args.get('msg')
+    )
+
+@app.route('/send_gcode/<uid>', methods=['POST'])
+def send_gcode(uid):
+    """
+    send_gcode expects form data optionally containing:
+      - method: 'raster' | 'vector' | 'fallback'  (default 'raster')
+      - stream_delay: optional float seconds between lines (default 0.02)
+    """
+    method = request.form.get('method', 'raster').lower()
+    try:
+        command_delay = float(request.form.get('stream_delay', 0.02))
+    except Exception:
+        command_delay = 0.02
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM fittings WHERE uid=?", (uid,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return f"Fitting with UID {uid} not found.", 404
+
+    row_dict = dict(row)
+    qr_content = generate_qr_content(
+        row_dict.get('uid'), row_dict.get('item_type'), row_dict.get('vendor'), row_dict.get('lot'),
+        row_dict.get('supply_date'), row_dict.get('warranty_end'), row_dict.get('manufactor_date',''),
+        row_dict.get('manufactor_number',''), row_dict.get('notes',''),
+        row_dict.get('risk','Low'), row_dict.get('vendor_risk','Low'), row_dict.get('vendor_email','')
+    )
+
+    # Generate both display + engrave QR; use the engrave one for g-code generation
+    _, qr_path_engrave = save_qr_image(uid, qr_content)
+
+    # Choose generator
+    try:
+        if method == 'vector':
+            gcode_text = qr_to_gcode_final(qr_path_engrave, laser_power=255, travel_speed=5000, engrave_speed=1500, target_size_mm=20.0)
+            print(f"[Vector] Generated {len(gcode_text.splitlines())} lines of G-code")
+        elif method == 'fallback':
+            gcode_text = qr_to_gcode_fallback(qr_path_engrave, laser_power=255, scale=0.5)
+            print(f"[Fallback] Generated {len(gcode_text.splitlines())} lines of G-code")
+        else:  # default raster
+            gcode_text = qr_to_gcode_raster(qr_path_engrave, laser_power=255, travel_speed=5000, engrave_speed=1500, target_size_mm=20.0)
+            print(f"[Raster] Generated {len(gcode_text.splitlines())} lines of G-code")
+    except Exception as e:
+        print(f"[G-code generation] Failed: {e}")
+        return f"G-code generation failed: {e}", 500
+
+    # Save G-code file
+    gcode_path = os.path.join(qr_dir, f"{uid}_engrave.gcode")
+    with open(gcode_path, "w") as f:
+        f.write(gcode_text)
+    print(f"[GCODE] Saved at {gcode_path}")
+
+    # Stream/send to ESP32 via websocket
+    success, resp_text = send_gcode_to_esp32_enhanced(gcode_text)
+    msg = f"G-code sent successfully! {resp_text}" if success else f"Failed: {resp_text}"
+    return redirect(url_for('view_record', uid=uid, msg=msg))
+
+@app.route('/regenerate_qr/<uid>', methods=['POST'])
+def regenerate_qr(uid):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM fittings WHERE uid=?", (uid,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return f"Fitting with UID {uid} not found.", 404
+    row_dict = dict(row)
+    qr_content = generate_qr_content(
+        row_dict.get('uid'), row_dict.get('item_type'), row_dict.get('vendor'), row_dict.get('lot'),
+        row_dict.get('supply_date'), row_dict.get('warranty_end'), row_dict.get('manufactor_date',''),
+        row_dict.get('manufactor_number',''), row_dict.get('notes',''),
+        row_dict.get('risk','Low'), row_dict.get('vendor_risk','Low'), row_dict.get('vendor_email','')
+    )
+    save_qr_image(uid, qr_content)
+    msg = f"QR regenerated for UID {uid}."
+    return redirect(url_for('view_record', uid=uid, msg=msg))
+
+@app.route('/vendor/send_gcode/<vendor_id>', methods=['POST'])
+def send_vendor_gcode(vendor_id):
+    """
+    Send vendor QR G-code to ESP32
+    """
+    if 'vendor_id' not in session or session['vendor_id'] != int(vendor_id):
+        return redirect(url_for('vendor_login'))
+    
+    method = request.form.get('method', 'raster').lower()
+    try:
+        command_delay = float(request.form.get('stream_delay', 0.02))
+    except Exception:
+        command_delay = 0.02
+
+    # Get vendor details
+    conn = get_vendor_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM vendors WHERE id=?", (vendor_id,))
+    vendor = c.fetchone()
+    conn.close()
+    
+    if not vendor:
+        return f"Vendor with ID {vendor_id} not found.", 404
+
+    # Convert sqlite3.Row to dictionary properly
+    vendor_dict = {key: vendor[key] for key in vendor.keys()}
+    
+    # Generate vendor QR content and image
+    vendor_qr_content = generate_vendor_qr_content(vendor_dict)
+    qr_path = save_vendor_qr_image(vendor_id, vendor_qr_content)
+
+    # Choose generator
+    try:
+        if method == 'vector':
+            gcode_text = vendor_qr_to_gcode_vector(qr_path, laser_power=255, travel_speed=5000, engrave_speed=1500, target_size_mm=25.0)
+            print(f"[Vector] Generated {len(gcode_text.splitlines())} lines of G-code for vendor QR")
+        else:  # default raster
+            gcode_text = vendor_qr_to_gcode_raster(qr_path, laser_power=255, travel_speed=5000, engrave_speed=1500, target_size_mm=25.0)
+            print(f"[Raster] Generated {len(gcode_text.splitlines())} lines of G-code for vendor QR")
+    except Exception as e:
+        print(f"[Vendor G-code generation] Failed: {e}")
+        return f"Vendor G-code generation failed: {e}", 500
+
+    # Save G-code file
+    gcode_path = os.path.join(vendor_gcode_dir, f"vendor_{vendor_id}_engrave.gcode")
+    with open(gcode_path, "w") as f:
+        f.write(gcode_text)
+    print(f"[Vendor GCODE] Saved at {gcode_path}")
+
+    # Stream/send to ESP32 via websocket
+    success, resp_text = send_gcode_to_esp32_enhanced(gcode_text)
+    msg = f"Vendor G-code sent successfully! {resp_text}" if success else f"Failed: {resp_text}"
+    return redirect(url_for('vendor_dashboard', msg=msg))
+
+@app.route('/scan/<uid>', methods=['GET'])
+def scan(uid):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM fittings WHERE uid=?", (uid,))
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        return "UID not found", 404
+
+    # Convert to dictionary
+    row_dict = {key: row[key] for key in row.keys()}
+    
+    risk = row_dict.get('risk', 'Unknown')
+    vendor_risk = row_dict.get('vendor_risk', 'Unknown')
+    inspection_date = row_dict.get('inspection_date') or compute_next_inspection(
+        row_dict.get('inspection_date'), 
+        row_dict.get('repair_date'), 
+        row_dict.get('risk')
+    )
+
+    # Build QR content; embed minimal info for scanning template
+    qr_content = generate_qr_content(
+        row_dict.get('uid'),
+        row_dict.get('item_type', ''),
+        row_dict.get('vendor', ''),
+        row_dict.get('lot', ''),
+        row_dict.get('supply_date', ''),
+        row_dict.get('warranty_end', ''),
+        row_dict.get('manufactor_date', ''),
+        row_dict.get('manufactor_number', ''),
+        row_dict.get('notes', ''),
+        risk,
+        vendor_risk,
+        row_dict.get('vendor_email','')
+    )
+
+    qr_b64 = generate_qr_image_base64(qr_content)
+    
+    return render_template(
+        'scan.html',
+        uid=row_dict.get('uid'),
+        risk=risk,
+        vendor_risk=vendor_risk,
+        inspection_date=inspection_date,
+        qr_code=qr_b64
+    )
+
+@app.route('/test_qr/<uid>')
+def test_qr(uid):
+    """Return the display QR image for visual testing."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM fittings WHERE uid=?", (uid,))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return "UID not found", 404
+
+    row_dict = dict(row)
+    qr_content = generate_qr_content(
+        row_dict.get('uid'), row_dict.get('item_type'), row_dict.get('vendor'), row_dict.get('lot'),
+        row_dict.get('supply_date'), row_dict.get('warranty_end'), row_dict.get('manufactor_date',''),
+        row_dict.get('manufactor_number',''), row_dict.get('notes',''),
+        row_dict.get('risk','Low'), row_dict.get('vendor_risk','Low'), row_dict.get('vendor_email','')
+    )
+
+    display_path, _ = save_qr_image(uid, qr_content)
+    return send_file(display_path, mimetype='image/png')
+
+# === Background threads ===
+def periodic_risk_update():
+    while True:
+        try:
+            update_all_risks()
+        except Exception as e:
+            print("[Risk Update] Exception:", e)
+        time.sleep(3600)
+
+def validate_all_qr_codes():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM fittings")
+    rows = c.fetchall()
+    for row in rows:
+        row_dict = dict(row)
+        uid = row_dict.get('uid')
+        display, engrave = os.path.join(qr_dir, f"{uid}_display.png"), os.path.join(qr_dir, f"{uid}_engrave.png")
+        qr_content = generate_qr_content(
+            row_dict.get('uid'), row_dict.get('item_type'), row_dict.get('vendor'), row_dict.get('lot'),
+            row_dict.get('supply_date'), row_dict.get('warranty_end'), row_dict.get('manufactor_date',''),
+            row_dict.get('manufactor_number',''), row_dict.get('notes',''),
+            row_dict.get('risk','Low'), row_dict.get('vendor_risk','Low'), row_dict.get('vendor_email','')
+        )
+        try:
+            if not os.path.exists(display) or not os.path.exists(engrave):
+                save_qr_image(uid, qr_content)
+                print(f"[QR Validation] Generated QR for UID {uid}")
+        except Exception as e:
+            print(f"[QR Validation] Error for UID {uid}: {e}")
+    conn.close()
+    print("[QR Validation] All QR codes checked.")
+
+def retry_pending_sync():
+    while True:
+        conn = get_db_connection()
+        c = conn.cursor()
+
+        # --- Pending UDM Sync ---
+        c.execute("SELECT * FROM fittings WHERE udm_synced=0")
+        pending_udm = c.fetchall()
+
+        for row in pending_udm:
+            r = dict(row)
+
+            # 🔎 Get vendor email from vendors table
+            vendor_email = None
+            try:
+                with sqlite3.connect(VENDOR_DB) as v_conn:
+                    v_conn.row_factory = sqlite3.Row
+                    vc = v_conn.cursor()
+                    vc.execute("SELECT email FROM vendors WHERE id=?", (r.get('vendor_id'),))
+                    v_row = vc.fetchone()
+                    if v_row:
+                        vendor_email = v_row['email']
+            except Exception as e:
+                print(f"[Vendor Lookup Error] {e}")
+
+            payload = {
+                "uid": r.get('uid'),
+                "item_type": r.get('item_type'),
+                "vendor": r.get('vendor'),
+                "email": vendor_email,  # ensure same key for UDM and TMS
+                "lot": r.get('lot'),
+                "supply_date": r.get('supply_date'),
+                "warranty_end": r.get('warranty_end'),
+                "manufactor_date": r.get('manufactor_date'),
+                "manufactor_number": r.get('manufactor_number'),
+                "repair_date": r.get('repair_date'),
+                "inspection_date": r.get('inspection_date'),
+                "risk": r.get('risk'),
+                "vendor_risk": r.get('vendor_risk'),
+                "notes": r.get('notes'),
+                "vendor_email":r.get('vendor_email')
+            }
+
+            try:
+                if push_to_udm(payload):
+                    c.execute("UPDATE fittings SET udm_synced=1 WHERE uid=?", (r.get('uid'),))
+                    conn.commit()
+                    print(f"[UDM Retry] UID {r.get('uid')} synced successfully.")
+            except Exception as e:
+                print(f"[UDM Retry] error pushing {r.get('uid')}: {e}")
+
+        # --- Pending TMS Sync ---
+        c.execute("SELECT * FROM fittings WHERE tms_synced=0")
+        pending_tms = c.fetchall()
+
+        for row in pending_tms:
+            r = dict(row)
+
+            vendor_email = None
+            try:
+                with sqlite3.connect(VENDOR_DB) as v_conn:
+                    v_conn.row_factory = sqlite3.Row
+                    vc = v_conn.cursor()
+                    vc.execute("SELECT email FROM vendors WHERE id=?", (r.get('vendor_id'),))
+                    v_row = vc.fetchone()
+                    if v_row:
+                        vendor_email = v_row['email']
+            except Exception as e:
+                print(f"[Vendor Lookup Error] {e}")
+
+            payload = {
+                "uid": r.get('uid'),
+                "item_type": r.get('item_type'),
+                "vendor": r.get('vendor'),
+                "email": vendor_email,
+                "lot": r.get('lot'),
+                "supply_date": r.get('supply_date'),
+                "warranty_end": r.get('warranty_end'),
+                "manufactor_date": r.get('manufactor_date'),
+                "manufactor_number": r.get('manufactor_number'),
+                "repair_date": r.get('repair_date'),
+                "inspection_date": r.get('inspection_date'),
+                "risk": r.get('risk'),
+                "vendor_risk": r.get('vendor_risk'),
+                "notes": r.get('notes'),
+                "vendor_email":r.get('vendor_email')
+
+            }
+
+            try:
+                if push_to_tms(payload):
+                    c.execute("UPDATE fittings SET tms_synced=1 WHERE uid=?", (r.get('uid'),))
+                    conn.commit()
+                    print(f"[TMS Retry] UID {r.get('uid')} synced successfully.")
+            except Exception as e:
+                print(f"[TMS Retry] error pushing {r.get('uid')}: {e}")
+
+        conn.close()
+        time.sleep(10)
+
+# === Run app ===
+if __name__ == '__main__':
+    threading.Thread(target=periodic_risk_update, daemon=True).start()
+    threading.Thread(target=validate_all_qr_codes, daemon=True).start()
+    threading.Thread(target=retry_pending_sync, daemon=True).start()
+
+    def open_browser():
+        webbrowser.open_new("http://127.0.0.1:5000")
+    threading.Timer(1.0, open_browser).start()
+
+    app.run(debug=True, host="0.0.0.0")

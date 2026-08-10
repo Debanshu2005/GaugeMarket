@@ -3,116 +3,181 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Dashboard</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<style>
-:root { --rail:#102f45; --rail-2:#18536f; --saffron:#d9822b; --green:#15803d; --paper:#f4f7fa; --line:#d9e2ea; }
-body { background:var(--paper); font-family: Arial, sans-serif; color:#14212b; }
-.metric { background:#fff; border:1px solid var(--line); border-radius:8px; padding:16px; height:100%; }
-.table-wrap { overflow-x:auto; }
-.admin-head { background:linear-gradient(135deg, var(--rail), var(--rail-2)); color:#fff; border-bottom:5px solid var(--saffron); }
-.card { border-radius:8px; border:1px solid var(--line); }
-</style>
+<title>Admin Dashboard — RailQR</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='rail.css') }}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
-<section class="admin-head py-4 mb-4">
-  <div class="container d-flex justify-content-between align-items-center flex-wrap gap-3">
-    <div>
-      <p class="mb-1 text-white-50">Railway supply command centre</p>
-      <h1 class="h3 mb-0">Admin Dashboard</h1>
-      <p class="mb-0 text-white-50">Orders, sellers, divisions, reviews, and QR-linked inventory.</p>
+<nav class="rq-topbar">
+  <div class="rq-topbar-inner">
+    <a href="{{ url_for('index') }}" class="rq-brand">
+      <img src="{{ url_for('static', filename='image/rail.png') }}" class="rq-brand-logo" alt="RailQR">
+      <span class="rq-brand-name">Rail<span>QR</span></span>
+    </a>
+    <div class="rq-nav">
+      <a href="{{ url_for('index') }}">Register Part</a>
+      <a href="{{ url_for('shop') }}">Marketplace</a>
+      <a href="{{ url_for('view_all') }}">Inventory</a>
+      <a href="{{ url_for('admin_dashboard') }}" class="active">Admin</a>
     </div>
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('shop') }}" class="btn btn-outline-light">Marketplace</a>
-      <a href="{{ url_for('view_all') }}" class="btn btn-light">Inventory</a>
+    <div class="rq-topbar-actions">
+      <a href="{{ url_for('view_all') }}" class="btn btn-light btn-sm"><i class="bi bi-table"></i> Inventory</a>
     </div>
   </div>
-</section>
-<main class="container py-2">
+</nav>
 
+<section class="rq-hero">
+  <div class="container" style="position:relative;z-index:1;">
+    <div class="rq-hero-kicker"><i class="bi bi-speedometer2"></i> Railway Supply Command Centre</div>
+    <h1>Admin Dashboard</h1>
+    <p>Orders, sellers, divisions, reviews, and QR-linked inventory at a glance.</p>
+  </div>
+</section>
+
+<div class="container py-4">
+
+  <!-- KPI METRICS -->
   <div class="row g-3 mb-4">
-    <div class="col-md-3"><div class="metric"><span class="text-muted">Revenue</span><h2 class="h4 mb-0">Rs. {{ '%.2f'|format(revenue or 0) }}</h2></div></div>
-    <div class="col-md-3"><div class="metric"><span class="text-muted">Orders</span><h2 class="h4 mb-0">{{ order_count }}</h2></div></div>
-    <div class="col-md-3"><div class="metric"><span class="text-muted">Sellers</span><h2 class="h4 mb-0">{{ seller_count }}</h2></div></div>
-    <div class="col-md-3"><div class="metric"><span class="text-muted">Low Stock</span><h2 class="h4 mb-0">{{ low_stock_count }}</h2></div></div>
+    <div class="col-6 col-md-3">
+      <div class="rq-metric">
+        <div class="rq-metric-label"><i class="bi bi-currency-rupee me-1"></i>Revenue</div>
+        <div class="rq-metric-value" style="font-size:1.4rem;">₹{{ '%.0f'|format(revenue or 0) }}</div>
+        <div class="rq-metric-sub">Total marketplace</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="rq-metric">
+        <div class="rq-metric-label"><i class="bi bi-receipt me-1"></i>Orders</div>
+        <div class="rq-metric-value">{{ order_count }}</div>
+        <div class="rq-metric-sub">All time</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="rq-metric">
+        <div class="rq-metric-label"><i class="bi bi-building me-1"></i>Sellers</div>
+        <div class="rq-metric-value">{{ seller_count }}</div>
+        <div class="rq-metric-sub">Registered vendors</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="rq-metric">
+        <div class="rq-metric-label"><i class="bi bi-exclamation-triangle me-1"></i>Low Stock</div>
+        <div class="rq-metric-value" style="color:{% if low_stock_count > 0 %}var(--amber){% else %}var(--green){% endif %};">{{ low_stock_count }}</div>
+        <div class="rq-metric-sub">Products ≤ 5 units</div>
+      </div>
+    </div>
   </div>
 
   <div class="row g-4">
+    <!-- LEFT: ORDERS -->
     <div class="col-lg-7">
-      <div class="card shadow-sm">
-        <div class="card-header bg-white"><h2 class="h5 mb-0">Recent Orders</h2></div>
-        <div class="card-body table-wrap">
-          {% if recent_orders %}
-          <table class="table align-middle">
-            <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th>Created</th></tr></thead>
+      <div class="rq-card mb-4">
+        <div class="rq-card-header">
+          <h2><i class="bi bi-receipt me-2 text-primary"></i>Recent Orders</h2>
+          <span style="font-size:.8125rem;color:var(--ink-3);">Last 20</span>
+        </div>
+        {% if recent_orders %}
+        <div class="table-wrap">
+          <table class="rq-table">
+            <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th>Date</th></tr></thead>
             <tbody>
               {% for order in recent_orders %}
               <tr>
-                <td>{{ order.order_no }}</td>
+                <td style="font-weight:700;font-size:.8125rem;color:var(--blue);">{{ order.order_no }}</td>
                 <td>{{ order.customer_name }}</td>
-                <td><span class="badge bg-info text-dark">{{ order.status }}</span></td>
-                <td>Rs. {{ '%.2f'|format(order.grand_total or 0) }}</td>
-                <td>{{ order.created_at }}</td>
+                <td>
+                  {% if order.status in ['Delivered','Completed'] %}
+                  <span class="rq-badge rq-badge-green">{{ order.status }}</span>
+                  {% elif order.status == 'Cancelled' %}
+                  <span class="rq-badge rq-badge-red">{{ order.status }}</span>
+                  {% elif order.status in ['Shipped','Out for Delivery'] %}
+                  <span class="rq-badge rq-badge-blue">{{ order.status }}</span>
+                  {% else %}
+                  <span class="rq-badge rq-badge-amber">{{ order.status }}</span>
+                  {% endif %}
+                </td>
+                <td style="font-weight:700;">₹{{ '%.2f'|format(order.grand_total or 0) }}</td>
+                <td style="font-size:.8125rem;color:var(--ink-3);">{{ order.created_at[:10] if order.created_at else '—' }}</td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
+        </div>
+        {% else %}
+        <div class="rq-empty"><p>No orders yet.</p></div>
+        {% endif %}
+      </div>
+
+      <!-- CATEGORY INVENTORY -->
+      <div class="rq-card">
+        <div class="rq-card-header"><h2><i class="bi bi-box-seam me-2 text-primary"></i>Category Inventory</h2></div>
+        <div class="rq-card-body">
+          {% if categories %}
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            {% for cat in categories %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+              <span style="font-weight:600;">{{ cat.category or 'Uncategorized' }}</span>
+              <div style="display:flex;gap:8px;">
+                <span class="rq-badge rq-badge-navy">{{ cat.product_count }} products</span>
+                <span class="rq-badge rq-badge-blue">{{ cat.stock_count }} stock</span>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
           {% else %}
-          <p class="text-muted mb-0">No orders yet.</p>
+          <div class="rq-empty" style="padding:20px;"><p style="margin:0;">No products yet.</p></div>
           {% endif %}
         </div>
       </div>
     </div>
 
+    <!-- RIGHT: STATUS + DIVISIONS -->
     <div class="col-lg-5">
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white"><h2 class="h5 mb-0">Order Status</h2></div>
-        <div class="card-body">
+      <div class="rq-card mb-4">
+        <div class="rq-card-header"><h2>Order Status Breakdown</h2></div>
+        <div class="rq-card-body">
           {% if status_counts %}
-          {% for row in status_counts %}
-          <div class="d-flex justify-content-between border-bottom py-2">
-            <span>{{ row[0] }}</span>
-            <strong>{{ row[1] }}</strong>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            {% for row in status_counts %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+              <span style="font-size:.875rem;">{{ row[0] }}</span>
+              <span style="font-weight:800;font-size:1rem;">{{ row[1] }}</span>
+            </div>
+            {% endfor %}
           </div>
-          {% endfor %}
           {% else %}
-          <p class="text-muted mb-0">No status data yet.</p>
+          <div class="rq-empty" style="padding:20px;"><p style="margin:0;">No status data yet.</p></div>
           {% endif %}
         </div>
       </div>
 
-      <div class="card shadow-sm">
-        <div class="card-header bg-white"><h2 class="h5 mb-0">Category Inventory</h2></div>
-        <div class="card-body">
-          {% for category in categories %}
-          <div class="d-flex justify-content-between border-bottom py-2">
-            <span>{{ category.category or 'Uncategorized' }}</span>
-            <span>{{ category.product_count }} products, {{ category.stock_count }} stock</span>
-          </div>
-          {% else %}
-          <p class="text-muted mb-0">No products yet.</p>
-          {% endfor %}
-        </div>
-      </div>
-
-      <div class="card shadow-sm mt-4">
-        <div class="card-header bg-white"><h2 class="h5 mb-0">Railway Divisions</h2></div>
-        <div class="card-body">
-          {% for division in divisions %}
-          <div class="border-bottom py-2">
-            <div class="d-flex justify-content-between">
-              <strong>{{ division.railway_division or 'HWH Division' }}</strong>
-              <span>{{ division.seller_count }} sellers</span>
+      <div class="rq-card">
+        <div class="rq-card-header"><h2><i class="bi bi-train-front me-2 text-primary"></i>Railway Divisions</h2></div>
+        <div class="rq-card-body">
+          {% if divisions %}
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            {% for div in divisions %}
+            <div style="padding:12px;background:var(--paper);border-radius:8px;border-left:3px solid var(--saffron);">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-weight:700;font-size:.875rem;">{{ div.railway_division or 'HWH Division' }}</span>
+                <span class="rq-badge rq-badge-navy">{{ div.seller_count }} sellers</span>
+              </div>
+              <div style="font-size:.75rem;color:var(--ink-3);">{{ div.railway_zone or 'South Eastern Railway' }} · {{ div.supply_region or 'West Bengal, India' }}</div>
             </div>
-            <small class="text-muted">{{ division.railway_zone or 'South Eastern Railway' }} · {{ division.supply_region or 'West Bengal, India' }}</small>
+            {% endfor %}
           </div>
           {% else %}
-          <p class="text-muted mb-0">No division data yet.</p>
-          {% endfor %}
+          <div class="rq-empty" style="padding:20px;"><p style="margin:0;">No division data yet.</p></div>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
-</main>
+</div>
+
+<footer class="rq-footer">
+  <img src="{{ url_for('static', filename='image/rail.png') }}" alt="Indian Railways" style="height:22px;opacity:.5;vertical-align:middle;margin-right:8px;">
+  © Indian Railways Fittings Department &nbsp;·&nbsp; <a href="{{ url_for('shop') }}">Marketplace</a> &nbsp;·&nbsp; <a href="{{ url_for('view_all') }}">Inventory</a>
+</footer>
 </body>
 </html>
