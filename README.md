@@ -5,6 +5,18 @@ Vendors can register, manage fittings, generate AI-styled QR codes, and transmit
 
 ---
 
+## Demo Access
+
+If you have seeded the database using `python scripts/create_demo_data.py`, you can use the following credentials to explore the application:
+
+- **Admin Login**: Located in the top-right navigation menu.
+  - Password: `admin1234` (configurable via `ADMIN_PASSWORD` environment variable)
+- **Vendor Login**:
+  - Email: `seller@railtrust.local`
+  - Password: `seller123`
+
+---
+
 ## Screenshots
 
 ### Vendor Registration Page
@@ -143,7 +155,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Access the web UI at **http://localhost:5000**
+Access the web UI at **https://rail-qr-marketplace.vercel.app/**
 
 - Register/login as a vendor from the portal.
 - Browse fittings in the marketplace shop.

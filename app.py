@@ -42,6 +42,17 @@ from ai_module import get_risk_level, update_all_risks, QRAnomalyDetector
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(16))
 
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin1234")
+
+def admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect(url_for('admin_login', next=request.path))
+        return f(*args, **kwargs)
+    return decorated
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 IS_VERCEL = bool(os.environ.get("VERCEL"))
 RUNTIME_DIR = tempfile.gettempdir() if IS_VERCEL else BASE_DIR
@@ -1376,6 +1387,24 @@ def vendor_dashboard():
     c_fittings = conn_fittings.cursor()
     c_fittings.execute("SELECT * FROM fittings WHERE vendor_id=?", (vendor_id,))
     products = [{key: row[key] for key in row.keys()} for row in c_fittings.fetchall()]
+    # Real total order count (not capped at 25)
+    c_fittings.execute("""
+        SELECT COUNT(DISTINCT o.id)
+        FROM marketplace_order_items i
+        JOIN marketplace_orders o ON o.id = i.order_id
+        WHERE i.vendor_id=? OR i.vendor=?
+    """, (str(vendor_id), vendor_dict['company_name']))
+    total_order_count = c_fittings.fetchone()[0]
+
+    # Real vendor revenue (non-cancelled orders only)
+    c_fittings.execute("""
+        SELECT COALESCE(SUM(i.line_total), 0)
+        FROM marketplace_order_items i
+        JOIN marketplace_orders o ON o.id = i.order_id
+        WHERE (i.vendor_id=? OR i.vendor=?) AND o.status NOT IN ('Cancelled')
+    """, (str(vendor_id), vendor_dict['company_name']))
+    total_revenue = round(c_fittings.fetchone()[0], 2)
+
     c_fittings.execute("""
         SELECT o.order_no, o.customer_name, o.status, o.created_at,
                i.uid, i.product_name, i.quantity, i.line_total
@@ -1398,6 +1427,8 @@ def vendor_dashboard():
                           vendor=vendor_dict, 
                           products=products,
                           orders=orders,
+                          total_order_count=total_order_count,
+                          total_revenue=total_revenue,
                           review_data=review_data,
                           revenue_series=revenue_series,
                           vendor_qr_code=vendor_qr_b64)
@@ -2014,7 +2045,26 @@ def add_review(uid):
     conn.close()
     return redirect(url_for('view_record', uid=uid, msg="Review added."))
 
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if session.get('admin_logged_in'):
+        return redirect(url_for('admin_dashboard'))
+    error = None
+    if request.method == 'POST':
+        if request.form.get('password') == ADMIN_PASSWORD:
+            session['admin_logged_in'] = True
+            next_url = request.args.get('next') or request.form.get('next')
+            return redirect(next_url if next_url else url_for('admin_dashboard'))
+        error = 'Invalid password'
+    return render_template('admin_login.html', error=error)
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('admin_login'))
+
 @app.route('/admin')
+@admin_required
 def admin_dashboard():
     conn = get_db_connection()
     c = conn.cursor()
@@ -2776,6 +2826,7 @@ def get_shipment(order_no):
 
 
 @app.route('/admin/audit')
+@admin_required
 def admin_audit_log():
     conn = get_db_connection()
     rows = conn.execute(
@@ -2787,6 +2838,7 @@ def admin_audit_log():
 
 
 @app.route('/admin/analytics')
+@admin_required
 def admin_analytics():
     conn = get_db_connection()
     c = conn.cursor()
@@ -2982,6 +3034,7 @@ def update_order_status_v2(order_no):
 # ============================================================
 
 @app.route('/admin/divisions')
+@admin_required
 def admin_divisions():
     conn = get_vendor_db_connection()
     rows = conn.execute("SELECT * FROM railway_divisions ORDER BY zone, name").fetchall()
@@ -2991,6 +3044,7 @@ def admin_divisions():
 
 
 @app.route('/admin/intelligence')
+@admin_required
 def admin_intelligence():
     conn = get_db_connection()
     c = conn.cursor()
@@ -3044,6 +3098,7 @@ def admin_intelligence():
 
 
 @app.route('/admin/high-risk')
+@admin_required
 def admin_high_risk():
     conn = get_db_connection()
     rows = conn.execute(
@@ -3072,6 +3127,15 @@ def post_register_hooks(uid, item_type, vendor, risk_level, vendor_name=None):
     )
     record_audit('COMPONENT_REGISTERED', 'component', uid, vendor_name or vendor,
                  f"type={item_type} risk={risk_level}")
+    # Persist initial risk assessment so passport/intelligence have data immediately
+    try:
+        _conn = get_db_connection()
+        _row = _conn.execute("SELECT * FROM fittings WHERE uid=?", (uid,)).fetchone()
+        _conn.close()
+        if _row:
+            build_structured_risk({k: _row[k] for k in _row.keys()})
+    except Exception as _e:
+        print(f"[RiskAssessment on register] {_e}")
 
 
 def post_purchase_hooks(order_no, items, customer_name):
