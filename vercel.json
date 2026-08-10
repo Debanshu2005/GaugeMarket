@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "app.py": {
-      "excludeFiles": "{__tests__/**,__pycache__/**,graphify-out/**,_archive/**,workspace.json,workspacememory.md,*.log,*.pkl,*.pyc,static/**/*.gcode,static/image/*.pdf,scripts/patch_app.py,scripts/inject_routes.py,scripts/inject_hooks.py,test_routes.py}"
+      "excludeFiles": "{__pycache__/**,graphify-out/**,_archive/**,*.log,*.pkl,*.pyc,static/**/*.gcode,static/image/*.pdf}"
     }
   }
 }
