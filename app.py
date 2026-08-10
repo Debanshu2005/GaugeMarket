@@ -2955,6 +2955,59 @@ def admin_divisions():
     return jsonify(divisions)
 
 
+@app.route('/admin/intelligence')
+def admin_intelligence():
+    conn = get_db_connection()
+    c = conn.cursor()
+    today = datetime.today().date()
+    in_30 = (today + timedelta(days=30)).isoformat()
+
+    c.execute("SELECT uid, item_type, vendor, risk, inspection_date, warranty_end FROM fittings WHERE risk='High' ORDER BY uid")
+    high_risk = []
+    for row in c.fetchall():
+        d = {k: row[k] for k in row.keys()}
+        d['warranty_status'] = compute_warranty_status(d.get('warranty_end'))
+        high_risk.append(d)
+
+    c.execute(
+        "SELECT uid, item_type, vendor, inspection_date FROM fittings WHERE inspection_date BETWEEN ? AND ? ORDER BY inspection_date",
+        (today.isoformat(), in_30)
+    )
+    upcoming_inspections = [{k: row[k] for k in row.keys()} for row in c.fetchall()]
+
+    c.execute(
+        "SELECT uid, item_type, vendor, warranty_end FROM fittings WHERE warranty_end BETWEEN ? AND ? ORDER BY warranty_end",
+        (today.isoformat(), in_30)
+    )
+    expiring_warranty = [{k: row[k] for k in row.keys()} for row in c.fetchall()]
+
+    c.execute("SELECT lifecycle_status, COUNT(*) as cnt FROM fittings GROUP BY lifecycle_status ORDER BY cnt DESC")
+    lifecycle_counts = [{k: row[k] for k in row.keys()} for row in c.fetchall()]
+
+    c.execute("""
+        SELECT i.vendor, COALESCE(SUM(i.line_total),0) AS revenue, COUNT(DISTINCT i.order_id) AS orders
+        FROM marketplace_order_items i
+        GROUP BY i.vendor ORDER BY revenue DESC LIMIT 10
+    """)
+    top_vendors = [{k: row[k] for k in row.keys()} for row in c.fetchall()]
+    conn.close()
+
+    vconn = get_vendor_db_connection()
+    divisions = [{k: row[k] for k in row.keys()} for row in
+                 vconn.execute("SELECT * FROM railway_divisions WHERE status='ACTIVE' ORDER BY zone, name").fetchall()]
+    vconn.close()
+
+    return render_template(
+        'admin_intelligence.html',
+        high_risk=high_risk,
+        upcoming_inspections=upcoming_inspections,
+        expiring_warranty=expiring_warranty,
+        lifecycle_counts=lifecycle_counts,
+        top_vendors=top_vendors,
+        divisions=divisions,
+    )
+
+
 @app.route('/admin/high-risk')
 def admin_high_risk():
     conn = get_db_connection()

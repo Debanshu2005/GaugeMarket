@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intelligence — RailQR Admin</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='rail.css') }}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</head>
+<body>
+
+<nav class="rq-topbar">
+  <div class="rq-topbar-inner">
+    <a href="{{ url_for('index') }}" class="rq-brand">
+      <img src="{{ url_for('static', filename='image/rail.png') }}" class="rq-brand-logo" alt="RailQR">
+      <span class="rq-brand-name">Rail<span>QR</span></span>
+    </a>
+    <div class="rq-nav">
+      <a href="{{ url_for('index') }}">Register Part</a>
+      <a href="{{ url_for('shop') }}">Component Exchange</a>
+      <a href="{{ url_for('view_all') }}">Inventory</a>
+      <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+    </div>
+    <div class="rq-topbar-actions">
+      <a href="{{ url_for('view_all') }}" class="btn btn-light btn-sm"><i class="bi bi-table"></i> Inventory</a>
+    </div>
+  </div>
+</nav>
+
+<div class="rq-admin-wrap">
+
+  <aside class="rq-admin-sidebar" id="admin-sidebar">
+    <div style="padding:4px 4px 14px;border-bottom:1px solid var(--border);margin-bottom:10px;">
+      <div class="rq-terminal-label">Control Centre</div>
+    </div>
+    <a href="{{ url_for('admin_dashboard') }}" class="rq-admin-nav-link"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <a href="{{ url_for('view_all') }}" class="rq-admin-nav-link"><i class="bi bi-table"></i> Inventory</a>
+    <a href="{{ url_for('shop') }}" class="rq-admin-nav-link"><i class="bi bi-shop"></i> Component Exchange</a>
+    <a href="{{ url_for('track_order') }}" class="rq-admin-nav-link"><i class="bi bi-geo-alt"></i> Track Orders</a>
+    <a href="{{ url_for('index') }}" class="rq-admin-nav-link"><i class="bi bi-plus-circle"></i> Register Part</a>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+      <div class="rq-terminal-label" style="padding:0 10px;margin-bottom:8px;">Vendors</div>
+      <a href="{{ url_for('vendor_login') }}" class="rq-admin-nav-link"><i class="bi bi-box-arrow-in-right"></i> Vendor Login</a>
+      <a href="{{ url_for('vendor_register') }}" class="rq-admin-nav-link"><i class="bi bi-person-plus"></i> Register Vendor</a>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
+      <div class="rq-terminal-label" style="padding:0 10px;margin-bottom:8px;">Intelligence</div>
+      <a href="{{ url_for('admin_audit_log') }}" class="rq-admin-nav-link"><i class="bi bi-journal-text"></i> Audit Log</a>
+      <a href="{{ url_for('admin_intelligence') }}" class="rq-admin-nav-link active"><i class="bi bi-graph-up"></i> Intelligence</a>
+    </div>
+  </aside>
+
+  <main class="rq-admin-main">
+
+    <div style="margin-bottom:24px;">
+      <div class="rq-terminal-label mb-1"><i class="bi bi-graph-up me-1"></i>Railway Supply Intelligence</div>
+      <h1 style="font-size:1.5rem;margin:0;">Intelligence Dashboard</h1>
+    </div>
+
+    <!-- KPI ROW -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="rq-metric animate-fade-in-up delay-100" style="border-left-color:{% if high_risk|length > 0 %}var(--red,#f87171){% else %}var(--green){% endif %};">
+          <div class="rq-metric-label"><i class="bi bi-exclamation-triangle me-1"></i>High Risk</div>
+          <div class="rq-metric-value" style="color:{% if high_risk|length > 0 %}#f87171{% else %}#4ade80{% endif %};">{{ high_risk|length }}</div>
+          <div class="rq-metric-sub">Components flagged</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="rq-metric animate-fade-in-up delay-200" style="border-left-color:{% if upcoming_inspections|length > 0 %}var(--amber){% else %}var(--green){% endif %};">
+          <div class="rq-metric-label"><i class="bi bi-calendar-check me-1"></i>Inspections Due</div>
+          <div class="rq-metric-value" style="color:{% if upcoming_inspections|length > 0 %}#fbbf24{% else %}#4ade80{% endif %};">{{ upcoming_inspections|length }}</div>
+          <div class="rq-metric-sub">Next 30 days</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="rq-metric animate-fade-in-up delay-300" style="border-left-color:{% if expiring_warranty|length > 0 %}var(--amber){% else %}var(--green){% endif %};">
+          <div class="rq-metric-label"><i class="bi bi-shield-exclamation me-1"></i>Warranty Expiring</div>
+          <div class="rq-metric-value" style="color:{% if expiring_warranty|length > 0 %}#fbbf24{% else %}#4ade80{% endif %};">{{ expiring_warranty|length }}</div>
+          <div class="rq-metric-sub">Within 30 days</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="rq-metric animate-fade-in-up delay-400">
+          <div class="rq-metric-label"><i class="bi bi-train-front me-1"></i>Divisions</div>
+          <div class="rq-metric-value">{{ divisions|length }}</div>
+          <div class="rq-metric-sub">Active railway zones</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-lg-7">
+
+        <!-- HIGH RISK COMPONENTS -->
+        <div class="rq-card mb-4 animate-fade-in-up delay-100">
+          <div class="rq-card-header">
+            <h2><i class="bi bi-exclamation-triangle me-2" style="color:#f87171;"></i>High-Risk Components</h2>
+            <span style="font-size:.8125rem;color:var(--ink-3);">{{ high_risk|length }} flagged</span>
+          </div>
+          {% if high_risk %}
+          <div class="table-wrap">
+            <table class="rq-table">
+              <thead><tr><th>UID</th><th>Type</th><th>Vendor</th><th>Warranty</th><th>Inspection</th><th></th></tr></thead>
+              <tbody>
+                {% for c in high_risk %}
+                <tr>
+                  <td class="rq-mono" style="font-weight:700;font-size:.8125rem;">{{ c.uid }}</td>
+                  <td style="font-weight:600;">{{ c.item_type }}</td>
+                  <td style="font-size:.8125rem;">{{ c.vendor }}</td>
+                  <td>
+                    {% if c.warranty_status == 'EXPIRED' %}<span class="rq-badge rq-badge-red">Expired</span>
+                    {% elif c.warranty_status == 'EXPIRING_SOON' %}<span class="rq-badge rq-badge-amber">Expiring</span>
+                    {% elif c.warranty_status == 'ACTIVE' %}<span class="rq-badge rq-badge-green">Active</span>
+                    {% else %}<span class="rq-badge rq-badge-navy">—</span>{% endif %}
+                  </td>
+                  <td style="font-size:.8125rem;" class="rq-mono">{{ c.inspection_date or '—' }}</td>
+                  <td><a href="{{ url_for('component_passport', uid=c.uid) }}" class="btn btn-outline-primary btn-sm">Passport</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="rq-empty" style="padding:20px;"><p style="margin:0;">No high-risk components. All clear.</p></div>
+          {% endif %}
+        </div>
+
+        <!-- UPCOMING INSPECTIONS -->
+        <div class="rq-card mb-4 animate-fade-in-up delay-200">
+          <div class="rq-card-header">
+            <h2><i class="bi bi-calendar-check me-2" style="color:#fbbf24;"></i>Upcoming Inspections</h2>
+            <span style="font-size:.8125rem;color:var(--ink-3);">Next 30 days</span>
+          </div>
+          {% if upcoming_inspections %}
+          <div class="table-wrap">
+            <table class="rq-table">
+              <thead><tr><th>UID</th><th>Type</th><th>Vendor</th><th>Due Date</th><th></th></tr></thead>
+              <tbody>
+                {% for c in upcoming_inspections %}
+                <tr>
+                  <td class="rq-mono" style="font-weight:700;font-size:.8125rem;">{{ c.uid }}</td>
+                  <td style="font-weight:600;">{{ c.item_type }}</td>
+                  <td style="font-size:.8125rem;">{{ c.vendor }}</td>
+                  <td class="rq-mono" style="font-weight:700;color:#fbbf24;">{{ c.inspection_date }}</td>
+                  <td><a href="{{ url_for('component_passport', uid=c.uid) }}" class="btn btn-outline-secondary btn-sm">View</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="rq-empty" style="padding:20px;"><p style="margin:0;">No inspections due in the next 30 days.</p></div>
+          {% endif %}
+        </div>
+
+        <!-- EXPIRING WARRANTIES -->
+        <div class="rq-card mb-4 animate-fade-in-up delay-300">
+          <div class="rq-card-header">
+            <h2><i class="bi bi-shield-exclamation me-2" style="color:#fbbf24;"></i>Warranties Expiring Soon</h2>
+            <span style="font-size:.8125rem;color:var(--ink-3);">Within 30 days</span>
+          </div>
+          {% if expiring_warranty %}
+          <div class="table-wrap">
+            <table class="rq-table">
+              <thead><tr><th>UID</th><th>Type</th><th>Vendor</th><th>Expires</th><th></th></tr></thead>
+              <tbody>
+                {% for c in expiring_warranty %}
+                <tr>
+                  <td class="rq-mono" style="font-weight:700;font-size:.8125rem;">{{ c.uid }}</td>
+                  <td style="font-weight:600;">{{ c.item_type }}</td>
+                  <td style="font-size:.8125rem;">{{ c.vendor }}</td>
+                  <td class="rq-mono" style="font-weight:700;color:#fbbf24;">{{ c.warranty_end }}</td>
+                  <td><a href="{{ url_for('component_passport', uid=c.uid) }}" class="btn btn-outline-secondary btn-sm">View</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="rq-empty" style="padding:20px;"><p style="margin:0;">No warranties expiring in the next 30 days.</p></div>
+          {% endif %}
+        </div>
+
+        <!-- TOP VENDORS BY REVENUE -->
+        {% if top_vendors %}
+        <div class="rq-card animate-fade-in-up delay-400">
+          <div class="rq-card-header"><h2><i class="bi bi-trophy me-2" style="color:var(--saffron);"></i>Top Vendors by Revenue</h2></div>
+          <div class="rq-card-body">
+            {% set max_rev = namespace(val=1) %}
+            {% for v in top_vendors %}{% if v.revenue > max_rev.val %}{% set max_rev.val = v.revenue %}{% endif %}{% endfor %}
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              {% for v in top_vendors %}
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  <span style="font-weight:600;font-size:.875rem;">{{ v.vendor or 'Unknown' }}</span>
+                  <div style="display:flex;gap:6px;">
+                    <span class="rq-badge rq-badge-green rq-mono">₹{{ '%.0f'|format(v.revenue) }}</span>
+                    <span class="rq-badge rq-badge-navy">{{ v.orders }} orders</span>
+                  </div>
+                </div>
+                <div class="rq-bar-track">
+                  <div class="rq-bar-fill" style="width:{{ ((v.revenue / max_rev.val) * 100)|int }}%;"></div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+
+      <div class="col-lg-5">
+
+        <!-- LIFECYCLE BREAKDOWN -->
+        <div class="rq-card mb-4 animate-fade-in-up delay-100">
+          <div class="rq-card-header"><h2><i class="bi bi-diagram-3 me-2" style="color:var(--blue);"></i>Lifecycle Breakdown</h2></div>
+          <div class="rq-card-body">
+            {% if lifecycle_counts %}
+            {% set max_lc = namespace(val=1) %}
+            {% for lc in lifecycle_counts %}{% if lc.cnt > max_lc.val %}{% set max_lc.val = lc.cnt %}{% endif %}{% endfor %}
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              {% for lc in lifecycle_counts %}
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  <span style="font-weight:600;font-size:.875rem;">{{ lc.lifecycle_status or 'REGISTERED' }}</span>
+                  <span class="rq-badge rq-badge-navy rq-mono">{{ lc.cnt }}</span>
+                </div>
+                <div class="rq-bar-track">
+                  <div class="rq-bar-fill" style="width:{{ ((lc.cnt / max_lc.val) * 100)|int }}%;background:var(--blue);"></div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="rq-empty" style="padding:16px;"><p style="margin:0;">No lifecycle data yet.</p></div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- RAILWAY DIVISIONS -->
+        <div class="rq-card animate-fade-in-up delay-200">
+          <div class="rq-card-header"><h2><i class="bi bi-train-front me-2" style="color:var(--blue);"></i>Railway Divisions</h2></div>
+          <div class="rq-card-body">
+            {% if divisions %}
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              {% for div in divisions %}
+              <div style="padding:10px 12px;background:var(--surface);border-radius:var(--radius);border-left:3px solid var(--saffron);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+                  <span style="font-weight:700;font-size:.875rem;">{{ div.name }}</span>
+                  <span class="rq-badge rq-badge-navy rq-mono">{{ div.code }}</span>
+                </div>
+                <div class="rq-terminal-label">{{ div.zone }} · {{ div.region }}</div>
+                <div style="font-size:.75rem;color:var(--ink-3);margin-top:2px;">HQ: {{ div.hq_location }}</div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="rq-empty" style="padding:16px;"><p style="margin:0;">No divisions loaded.</p></div>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<button class="rq-admin-mobile-toggle" id="admin-mob-toggle"><i class="bi bi-list" style="font-size:1.1rem;"></i></button>
+
+<footer class="rq-footer">
+  <img src="{{ url_for('static', filename='image/rail.png') }}" alt="Indian Railways" style="height:22px;opacity:.5;vertical-align:middle;margin-right:8px;">
+  © Indian Railways Fittings Department
+</footer>
+
+<script>
+document.getElementById('admin-mob-toggle').addEventListener('click', function() {
+  document.getElementById('admin-sidebar').classList.toggle('open');
+});
+</script>
+</body>
+</html>
