@@ -3,13 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RailQR Marketplace — Railway Parts Exchange</title>
+<title>RailQR — Component Exchange</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='rail.css') }}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
 
-<!-- TOPBAR -->
 <nav class="rq-topbar">
   <div class="rq-topbar-inner">
     <a href="{{ url_for('index') }}" class="rq-brand">
@@ -18,13 +17,13 @@
     </a>
     <div class="rq-nav">
       <a href="{{ url_for('index') }}">Register Part</a>
-      <a href="{{ url_for('shop') }}" class="active">Marketplace</a>
+      <a href="{{ url_for('shop') }}" class="active">Component Exchange</a>
       <a href="{{ url_for('view_all') }}">Inventory</a>
       <a href="{{ url_for('admin_dashboard') }}">Admin</a>
       <a href="{{ url_for('track_order') }}">Track Order</a>
     </div>
     <div class="rq-topbar-actions">
-      <a href="{{ url_for('cart') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-cart3"></i> Cart {% if cart_count %}<span style="background:var(--saffron);color:#fff;border-radius:999px;padding:1px 6px;font-size:.7rem;margin-left:2px;">{{ cart_count }}</span>{% endif %}</a>
+      <a href="{{ url_for('cart') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-cart3"></i> Cart {% if cart_count %}<span style="background:var(--saffron);color:#fff;border-radius:3px;padding:1px 6px;font-size:.7rem;margin-left:2px;">{{ cart_count }}</span>{% endif %}</a>
       {% if session.get('vendor_id') %}
       <a href="{{ url_for('vendor_dashboard') }}" class="btn btn-light btn-sm"><i class="bi bi-speedometer2"></i> Dashboard</a>
       {% else %}
@@ -34,138 +33,258 @@
   </div>
 </nav>
 
-<!-- HERO -->
 <section class="rq-hero">
   <div class="container" style="position:relative;z-index:1;">
-    <div class="rq-hero-kicker"><i class="bi bi-shop"></i> Indian Railways Supply Marketplace</div>
-    <h1>Rail QR Parts Exchange</h1>
-    <p>QR-verified components mapped to railway zones, divisions, vendors, and reviews. Every part traceable from manufacture to installation.</p>
+    <div class="rq-hero-kicker animate-fade-in"><i class="bi bi-cpu"></i> B2B Railway Supply Chain · QR-Verified Components</div>
+    <h1 class="animate-fade-in-up delay-100">Component Exchange</h1>
+    <p class="animate-fade-in-up delay-200">QR-verified components mapped to railway zones, divisions, vendors, and risk assessments. Every part traceable from manufacture to installation.</p>
   </div>
 </section>
 
 <div class="container py-4">
 
-  <!-- FILTER BAR -->
-  <form method="get" class="rq-card mb-4">
-    <div class="rq-card-body">
-      <div class="row g-3 align-items-end">
-        <div class="col-lg-5">
-          <label class="form-label">Search Parts</label>
-          <div style="position:relative;">
-            <i class="bi bi-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ink-3);"></i>
-            <input name="q" class="form-control" style="padding-left:36px;" value="{{ query }}" placeholder="Product name, seller, UID, category…">
-          </div>
+  <!-- TOP BAR: search + sort + view toggle + filter toggle -->
+  <div class="rq-card mb-4">
+    <div class="rq-card-body" style="padding:14px 20px;">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <div style="position:relative;flex:1;min-width:200px;">
+          <i class="bi bi-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:.875rem;"></i>
+          <input id="shop-search" class="form-control" style="padding-left:34px;" placeholder="Search by name, UID, vendor, category…" value="{{ query }}">
         </div>
-        <div class="col-lg-3">
-          <label class="form-label">Category</label>
-          <select name="category" class="form-select">
-            <option value="">All categories</option>
+        <select id="shop-sort" class="form-select" style="width:auto;">
+          <option value="latest"     {% if sort_by=='latest'     %}selected{% endif %}>Latest</option>
+          <option value="price_low"  {% if sort_by=='price_low'  %}selected{% endif %}>Price: Low</option>
+          <option value="price_high" {% if sort_by=='price_high' %}selected{% endif %}>Price: High</option>
+          <option value="stock"      {% if sort_by=='stock'      %}selected{% endif %}>In Stock</option>
+          <option value="risk"       {% if sort_by=='risk'       %}selected{% endif %}>Risk Level</option>
+        </select>
+        <div class="rq-view-toggle">
+          <button class="rq-view-btn active" id="btn-grid" title="Grid view"><i class="bi bi-grid-3x3-gap-fill" style="font-size:.8rem;"></i></button>
+          <button class="rq-view-btn" id="btn-list" title="List view"><i class="bi bi-list-ul" style="font-size:.8rem;"></i></button>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm d-md-none" id="filter-toggle-btn"><i class="bi bi-funnel"></i> Filters</button>
+        <span id="result-count" style="font-size:.8125rem;color:var(--ink-3);white-space:nowrap;">{{ products|length }} components</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rq-shop-wrap">
+
+    <!-- FILTER SIDEBAR -->
+    <aside class="rq-filter-panel" id="filter-panel">
+      <div class="rq-card">
+        <div class="rq-card-body" style="padding:16px;">
+
+          <div class="rq-filter-section">
+            <div class="rq-filter-section-title">Category</div>
+            <button class="rq-filter-btn active" data-filter="category" data-value="">All Categories</button>
             {% for item in categories %}
-            <option value="{{ item }}" {% if category == item %}selected{% endif %}>{{ item }}</option>
+            <button class="rq-filter-btn" data-filter="category" data-value="{{ item }}">{{ item }}</button>
             {% endfor %}
-          </select>
-        </div>
-        <div class="col-lg-2">
-          <label class="form-label">Sort by</label>
-          <select name="sort" class="form-select">
-            <option value="latest"     {% if sort_by=='latest'     %}selected{% endif %}>Latest</option>
-            <option value="price_low"  {% if sort_by=='price_low'  %}selected{% endif %}>Price: Low</option>
-            <option value="price_high" {% if sort_by=='price_high' %}selected{% endif %}>Price: High</option>
-            <option value="stock"      {% if sort_by=='stock'      %}selected{% endif %}>In Stock</option>
-            <option value="risk"       {% if sort_by=='risk'       %}selected{% endif %}>Risk Level</option>
-          </select>
-        </div>
-        <div class="col-lg-2">
-          <button class="btn btn-primary w-100" type="submit"><i class="bi bi-funnel"></i> Filter</button>
+          </div>
+
+          <div class="rq-filter-section">
+            <div class="rq-filter-section-title">Risk Level</div>
+            <button class="rq-filter-btn active" data-filter="risk" data-value="">All Risk</button>
+            <button class="rq-filter-btn" data-filter="risk" data-value="Low"><span style="color:#4ade80;">●</span> Low</button>
+            <button class="rq-filter-btn" data-filter="risk" data-value="Medium"><span style="color:#fbbf24;">●</span> Medium</button>
+            <button class="rq-filter-btn" data-filter="risk" data-value="High"><span style="color:#f87171;">●</span> High</button>
+          </div>
+
+          <div class="rq-filter-section">
+            <div class="rq-filter-section-title">Stock</div>
+            <button class="rq-filter-btn active" data-filter="stock" data-value="">All</button>
+            <button class="rq-filter-btn" data-filter="stock" data-value="instock">In Stock Only</button>
+          </div>
+
+          <button id="clear-filters" class="btn btn-outline-danger btn-sm w-100 mt-2">Clear Filters</button>
         </div>
       </div>
-    </div>
-  </form>
+    </aside>
 
-  {% if products %}
-  <div class="row g-3">
-    {% for product in products %}
-    <div class="col-md-6 col-xl-4">
-      <div class="rq-product-card">
-        <!-- Top row -->
-        <div style="display:flex;gap:14px;align-items:flex-start;">
-          <div class="rq-product-qr">
-            <img src="{{ url_for('generated_qrcode', filename=product.uid ~ '_display.png') }}" alt="QR {{ product.uid }}" loading="lazy">
-          </div>
-          <div style="flex:1;min-width:0;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">
-              <h2 style="font-size:.9375rem;font-weight:700;margin:0;line-height:1.3;">{{ product.item_type }}</h2>
-              <span class="rq-badge rq-badge-navy" style="white-space:nowrap;">{{ product.category or 'Rail Components' }}</span>
+    <!-- PRODUCT GRID -->
+    <div class="rq-shop-main">
+      {% if products %}
+      <div id="product-grid" class="row g-3">
+        {% for product in products %}
+        <div class="col-md-6 col-xl-4 product-item animate-fade-in-up"
+             data-name="{{ product.item_type|lower }}"
+             data-uid="{{ product.uid|lower }}"
+             data-vendor="{{ product.vendor|lower }}"
+             data-category="{{ product.category|lower }}"
+             data-risk="{{ product.risk }}"
+             data-stock="{{ product.stock or 0 }}"
+             data-price="{{ product.sale_price or 0 }}"
+             style="animation-delay:{{ loop.index0 * 0.04 }}s;">
+          <div class="rq-product-card">
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <div class="rq-product-qr">
+                <img src="{{ url_for('generated_qrcode', filename=product.uid ~ '_display.png') }}" alt="QR {{ product.uid }}" loading="lazy">
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:3px;">
+                  <h2 style="font-size:.9375rem;font-weight:700;margin:0;line-height:1.3;">{{ product.item_type }}</h2>
+                  <span class="rq-badge rq-badge-navy" style="white-space:nowrap;flex-shrink:0;">{{ product.category or 'Rail Components' }}</span>
+                </div>
+                <div class="rq-terminal-label mb-1">UID {{ product.uid }}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px;">
+                  <span class="rq-badge rq-badge-green">{{ product.railway_division }}</span>
+                  <span class="rq-badge rq-badge-blue">{{ product.supply_region }}</span>
+                  {% if product.risk == 'High' %}<span class="rq-badge rq-badge-red"><i class="bi bi-exclamation-triangle-fill"></i> High Risk</span>
+                  {% elif product.risk == 'Medium' %}<span class="rq-badge rq-badge-amber">Medium Risk</span>
+                  {% else %}<span class="rq-badge rq-badge-green">Low Risk</span>{% endif %}
+                </div>
+                <p style="font-size:.8125rem;margin:0;">
+                  <i class="bi bi-building" style="color:var(--ink-3);"></i>
+                  {% if product.vendor_id %}
+                  <a href="{{ url_for('vendor_details', vendor_id=product.vendor_id) }}" style="font-weight:600;">{{ product.vendor }}</a>
+                  {% else %}<span style="font-weight:600;">{{ product.vendor }}</span>{% endif %}
+                </p>
+              </div>
             </div>
-            <p style="font-size:.75rem;color:var(--ink-3);margin-bottom:6px;">UID {{ product.uid }}</p>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
-              <span class="rq-badge rq-badge-green">{{ product.railway_division }}</span>
-              <span class="rq-badge rq-badge-blue">{{ product.supply_region }}</span>
+            <div style="flex:1;"></div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+              <div>
+                <div class="rq-product-price rq-mono">₹{{ '%.2f'|format(product.sale_price or 0) }}</div>
+                {% if product.discount %}<div style="font-size:.75rem;color:#4ade80;font-weight:600;">{{ product.discount }}% off</div>{% endif %}
+                <div style="font-size:.75rem;color:var(--ink-3);">
+                  {% if product.stock and product.stock > 0 %}
+                  <i class="bi bi-check-circle-fill" style="color:#4ade80;"></i> {{ product.stock }} in stock
+                  {% else %}<i class="bi bi-x-circle-fill" style="color:#f87171;"></i> Out of stock{% endif %}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <a href="{{ url_for('view_record', uid=product.uid) }}" class="btn btn-outline-secondary btn-sm">Details</a>
+                {% if product.stock and product.price %}
+                <form method="post" action="{{ url_for('add_to_cart', uid=product.uid) }}">
+                  <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-cart-plus"></i> Add</button>
+                </form>
+                {% else %}
+                <button class="btn btn-sm" style="background:var(--surface);color:var(--ink-3);border:1.5px solid var(--border);cursor:not-allowed;" disabled>Unavailable</button>
+                {% endif %}
+              </div>
             </div>
-            <p style="font-size:.8125rem;margin-bottom:4px;">
-              <i class="bi bi-building" style="color:var(--ink-3);"></i>
-              {% if product.vendor_id %}
-              <a href="{{ url_for('vendor_details', vendor_id=product.vendor_id) }}" style="font-weight:600;">{{ product.vendor }}</a>
-              {% else %}
-              <span style="font-weight:600;">{{ product.vendor }}</span>
-              {% endif %}
-            </p>
-            <p style="font-size:.75rem;color:var(--ink-3);margin:0;">
-              <i class="bi bi-star-fill" style="color:#f59e0b;"></i> {{ product.review_summary.avg }}/5 part &nbsp;·&nbsp;
-              <i class="bi bi-person-check" style="color:#f59e0b;"></i> {{ product.vendor_review_summary.avg }}/5 vendor
-            </p>
           </div>
         </div>
+        {% endfor %}
+      </div>
 
-        <!-- Spacer -->
-        <div style="flex:1;"></div>
-
-        <!-- Bottom row -->
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
-          <div>
-            <div class="rq-product-price">₹{{ '%.2f'|format(product.sale_price or 0) }}</div>
-            {% if product.discount %}
-            <div style="font-size:.75rem;color:var(--green);font-weight:600;">{{ product.discount }}% off</div>
-            {% endif %}
-            <div style="font-size:.75rem;color:var(--ink-3);">
-              {% if product.stock and product.stock > 0 %}
-              <i class="bi bi-check-circle-fill" style="color:var(--green);"></i> {{ product.stock }} in stock
-              {% else %}
-              <i class="bi bi-x-circle-fill" style="color:var(--red);"></i> Out of stock
-              {% endif %}
-            </div>
-          </div>
-          <div style="display:flex;gap:6px;">
-            <a href="{{ url_for('view_record', uid=product.uid) }}" class="btn btn-outline-secondary btn-sm">Details</a>
-            {% if product.stock and product.price %}
-            <form method="post" action="{{ url_for('add_to_cart', uid=product.uid) }}">
-              <button class="btn btn-primary btn-sm" type="submit"><i class="bi bi-cart-plus"></i> Add</button>
-            </form>
-            {% else %}
-            <button class="btn btn-sm" style="background:var(--paper);color:var(--ink-3);border:1.5px solid var(--border);cursor:not-allowed;" disabled>Unavailable</button>
-            {% endif %}
+      <div id="no-results" style="display:none;">
+        <div class="rq-card mt-2">
+          <div class="rq-empty">
+            <svg class="rq-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <h3>No components match</h3>
+            <p>Try adjusting your search or filters.</p>
+            <button id="clear-filters-2" class="btn btn-primary btn-sm">Clear Filters</button>
           </div>
         </div>
       </div>
-    </div>
-    {% endfor %}
-  </div>
 
-  {% else %}
-  <div class="rq-card">
-    <div class="rq-empty">
-      <svg class="rq-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-      <h3>No products match your filters</h3>
-      <p>Try a different search term or category, or add marketplace-ready stock from the seller tools.</p>
-      <a href="{{ url_for('index') }}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Add Product</a>
+      {% else %}
+      <div class="rq-card">
+        <div class="rq-empty">
+          <svg class="rq-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/></svg>
+          <h3>No components listed yet</h3>
+          <p>Register the first QR-linked component to populate the exchange.</p>
+          <a href="{{ url_for('index') }}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Register Component</a>
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
-  {% endif %}
 </div>
 
 <footer class="rq-footer">
   <img src="{{ url_for('static', filename='image/rail.png') }}" alt="Indian Railways" style="height:22px;opacity:.5;vertical-align:middle;margin-right:8px;">
   © Indian Railways Fittings Department &nbsp;·&nbsp; <a href="{{ url_for('index') }}">Register Part</a> &nbsp;·&nbsp; <a href="{{ url_for('track_order') }}">Track Order</a>
 </footer>
+
+<script>
+(function() {
+  var items = Array.from(document.querySelectorAll('.product-item'));
+  var grid = document.getElementById('product-grid');
+  var noResults = document.getElementById('no-results');
+  var countEl = document.getElementById('result-count');
+  var searchEl = document.getElementById('shop-search');
+  var sortEl = document.getElementById('shop-sort');
+  var activeFilters = { category: '', risk: '', stock: '' };
+  var currentView = 'grid';
+
+  function applyFilters() {
+    var q = searchEl ? searchEl.value.toLowerCase() : '';
+    var visible = 0;
+    items.forEach(function(item) {
+      var d = item.dataset;
+      var matchSearch = !q || d.name.includes(q) || d.uid.includes(q) || d.vendor.includes(q) || d.category.includes(q);
+      var matchCat  = !activeFilters.category || d.category === activeFilters.category.toLowerCase();
+      var matchRisk = !activeFilters.risk || d.risk === activeFilters.risk;
+      var matchStock = !activeFilters.stock || (activeFilters.stock === 'instock' && parseInt(d.stock) > 0);
+      var show = matchSearch && matchCat && matchRisk && matchStock;
+      item.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    if (countEl) countEl.textContent = visible + ' component' + (visible !== 1 ? 's' : '');
+    if (noResults) noResults.style.display = visible === 0 ? '' : 'none';
+    if (grid) grid.style.display = visible === 0 ? 'none' : '';
+  }
+
+  // Search
+  if (searchEl) searchEl.addEventListener('input', applyFilters);
+
+  // Filter buttons
+  document.querySelectorAll('.rq-filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var type = this.dataset.filter;
+      var val = this.dataset.value;
+      activeFilters[type] = val;
+      document.querySelectorAll('[data-filter="'+type+'"]').forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      applyFilters();
+    });
+  });
+
+  // Clear filters
+  function clearAll() {
+    activeFilters = { category: '', risk: '', stock: '' };
+    if (searchEl) searchEl.value = '';
+    document.querySelectorAll('.rq-filter-btn').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.value === '');
+    });
+    applyFilters();
+  }
+  var cf = document.getElementById('clear-filters');
+  var cf2 = document.getElementById('clear-filters-2');
+  if (cf) cf.addEventListener('click', clearAll);
+  if (cf2) cf2.addEventListener('click', clearAll);
+
+  // View toggle
+  var btnGrid = document.getElementById('btn-grid');
+  var btnList = document.getElementById('btn-list');
+  function setView(v) {
+    currentView = v;
+    btnGrid.classList.toggle('active', v === 'grid');
+    btnList.classList.toggle('active', v === 'list');
+    items.forEach(function(item) {
+      var card = item.querySelector('.rq-product-card');
+      if (!card) return;
+      if (v === 'list') {
+        item.className = item.className.replace(/col-md-6|col-xl-4/g, '').trim() + ' col-12';
+        card.classList.add('list-view');
+      } else {
+        item.className = item.className.replace('col-12', '').trim();
+        if (!item.className.includes('col-md-6')) item.className += ' col-md-6 col-xl-4';
+        card.classList.remove('list-view');
+      }
+    });
+  }
+  if (btnGrid) btnGrid.addEventListener('click', function() { setView('grid'); });
+  if (btnList) btnList.addEventListener('click', function() { setView('list'); });
+
+  // Mobile filter toggle
+  var ftBtn = document.getElementById('filter-toggle-btn');
+  var fp = document.getElementById('filter-panel');
+  if (ftBtn && fp) ftBtn.addEventListener('click', function() { fp.classList.toggle('open'); });
+})();
+</script>
 </body>
 </html>
