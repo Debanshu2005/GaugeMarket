@@ -2088,6 +2088,33 @@ def generated_qrcode(filename):
         return send_file(runtime_file)
     if os.path.exists(bundled_file):
         return send_file(bundled_file)
+
+    # On-demand generation: derive UID from filename like "<uid>_display.png"
+    # Handles both _display.png and _engrave.png
+    uid = None
+    for suffix in ('_display.png', '_engrave.png', '.png'):
+        if safe_name.endswith(suffix):
+            uid = safe_name[:-len(suffix)]
+            break
+    if uid:
+        conn = get_db_connection()
+        row = conn.execute("SELECT * FROM fittings WHERE uid=?", (uid,)).fetchone()
+        conn.close()
+        if row:
+            row_dict = {k: row[k] for k in row.keys()}
+            qr_content = generate_qr_content(
+                row_dict.get('uid'), row_dict.get('item_type'), row_dict.get('vendor'),
+                row_dict.get('lot'), row_dict.get('supply_date'), row_dict.get('warranty_end'),
+                row_dict.get('manufactor_date', ''), row_dict.get('manufactor_number', ''),
+                row_dict.get('notes', ''), row_dict.get('risk', 'Low'),
+                row_dict.get('vendor_risk', 'Low'), row_dict.get('vendor_email', '')
+            )
+            try:
+                save_qr_image(uid, qr_content)
+                if os.path.exists(runtime_file):
+                    return send_file(runtime_file)
+            except Exception as e:
+                print(f"[QR on-demand] {e}")
     return "QR image not found", 404
 
 @app.route('/generated/vendor_qrcodes/<path:filename>')
