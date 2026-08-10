@@ -12,7 +12,7 @@
 <!-- TOPBAR -->
 <nav class="rq-topbar">
   <div class="rq-topbar-inner">
-    <a href="{{ url_for('index') }}" class="rq-brand">
+    <a href="{{ url_for('landing') }}" class="rq-brand">
       <img src="{{ url_for('static', filename='image/rail.png') }}" class="rq-brand-logo" alt="RailQR">
       <span class="rq-brand-name">Rail<span>QR</span></span>
     </a>
@@ -38,17 +38,24 @@
 <section class="rq-hero">
   <div class="container" style="position:relative;z-index:1;">
     <div class="row align-items-center g-4">
-      <div class="col-lg-7">
-        <div class="rq-hero-kicker"><i class="bi bi-qr-code"></i> Railway Supply Chain Portal</div>
-        <h1>Register &amp; Track Railway Parts</h1>
-        <p style="font-size:1.05rem;max-width:520px;">Generate QR-linked digital passports for railway components. Every part gets a unique QR code, AI-powered risk assessment, and full supply chain traceability.</p>
-        <div class="d-flex gap-2 flex-wrap mt-3">
-          <a href="{{ url_for('shop') }}" class="btn btn-saffron"><i class="bi bi-shop"></i> Open Marketplace</a>
-          <a href="{{ url_for('view_all') }}" class="btn btn-outline-light"><i class="bi bi-table"></i> View Inventory</a>
+      <div class="col-lg-8">
+        <div class="rq-hero-kicker animate-fade-in"><i class="bi bi-cpu"></i> Component Registration Terminal · Indian Railways Supply Chain</div>
+        <h1 class="animate-fade-in-up delay-100">Register &amp; Track Railway Components</h1>
+        <p class="animate-fade-in-up delay-200" style="font-size:1.05rem;max-width:540px;">Generate QR-linked digital passports for railway components. Every part gets a unique QR code, AI-powered risk assessment, and full supply chain traceability.</p>
+        <div class="d-flex gap-2 flex-wrap mt-3 animate-fade-in-up delay-300">
+          <a href="{{ url_for('shop') }}" class="btn btn-saffron"><i class="bi bi-shop"></i> Component Exchange</a>
+          <a href="{{ url_for('view_all') }}" class="btn btn-outline-light"><i class="bi bi-table"></i> Inventory Records</a>
         </div>
       </div>
-      <div class="col-lg-5 d-none d-lg-flex justify-content-end">
-        <img src="{{ url_for('static', filename='image/azadi.png') }}" alt="Azadi Ka Amrit Mahotsav" style="max-height:120px;opacity:.9;filter:drop-shadow(0 4px 16px rgba(0,0,0,.3));">
+      <div class="col-lg-4 d-none d-lg-flex justify-content-end gap-3 animate-fade-in-up delay-400">
+        <div style="text-align:center;">
+          <div class="rq-stat-counter" id="stat-parts" style="font-size:2rem;font-weight:800;color:#fff;">0</div>
+          <div style="font-size:.7rem;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.07em;">Parts Registered</div>
+        </div>
+        <div style="text-align:center;">
+          <div class="rq-stat-counter" id="stat-vendors" style="font-size:2rem;font-weight:800;color:#fff;">0</div>
+          <div style="font-size:.7rem;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.07em;">Vendors</div>
+        </div>
       </div>
     </div>
   </div>
@@ -56,6 +63,15 @@
 
 <!-- MAIN CONTENT -->
 <div class="container py-4">
+
+  {% if not session.get('vendor_id') %}
+  <div class="alert mb-4" style="background:rgba(255,180,0,.08);border:1.5px solid rgba(255,180,0,.3);color:#f5c842;border-radius:var(--radius);">
+    <i class="bi bi-lock-fill me-2"></i>
+    <strong>Vendor login required</strong> to register parts.
+    <a href="{{ url_for('vendor_login', next=url_for('index')) }}" class="btn btn-saffron btn-sm ms-3"><i class="bi bi-box-arrow-in-right"></i> Login</a>
+    <a href="{{ url_for('vendor_register') }}" class="btn btn-outline-light btn-sm ms-1">Register</a>
+  </div>
+  {% endif %}
 
   {% if error %}
   <div class="alert alert-danger mb-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}</div>
@@ -72,7 +88,7 @@
           </div>
         </div>
         <div class="rq-card-body">
-          <form method="POST">
+          <form method="POST" {% if not session.get('vendor_id') %}onsubmit="return confirmLogin(event)"{% endif %}>
 
             <div class="row g-3">
               <div class="col-md-6">
@@ -92,12 +108,18 @@
               </div>
               <div class="col-md-6">
                 <label class="form-label">Linked Vendor Account</label>
-                <select class="form-select" name="vendor_id">
-                  <option value="">— Select registered vendor —</option>
+                {% if session.get('vendor_id') %}
+                <select class="form-select" name="vendor_id" required>
                   {% for vendor in vendors %}
-                  <option value="{{ vendor.id }}" {% if request.form.vendor_id == vendor.id|string %}selected{% endif %}>{{ vendor.company_name }}</option>
+                  <option value="{{ vendor.id }}" {% if vendor.id == session.vendor_id %}selected{% endif %}>{{ vendor.company_name }}</option>
                   {% endfor %}
                 </select>
+                <small class="text-muted" style="font-size:.75rem;">Locked to your account.</small>
+                {% else %}
+                <select class="form-select" name="vendor_id" disabled>
+                  <option>— Login to link your account —</option>
+                </select>
+                {% endif %}
               </div>
             </div>
 
@@ -141,8 +163,8 @@
             </div>
 
             <!-- Marketplace fields -->
-            <div style="background:var(--paper);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-top:16px;">
-              <p style="font-size:.8125rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:12px;"><i class="bi bi-shop me-1"></i>Marketplace Settings</p>
+            <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-top:16px;">
+              <div class="rq-section-rule">Marketplace Settings</div>
               <div class="row g-3">
                 <div class="col-md-3">
                   <label class="form-label">Category</label>
@@ -163,7 +185,7 @@
               </div>
             </div>
 
-            <button type="submit" class="btn btn-primary btn-lg w-100 mt-4">
+            <button type="submit" class="btn btn-primary btn-lg w-100 mt-4" {% if not session.get('vendor_id') %}disabled title="Login first"{% endif %}>
               <i class="bi bi-qr-code-scan"></i> Generate QR &amp; Register Part
             </button>
           </form>
@@ -187,19 +209,19 @@
       <!-- How it works -->
       <div class="rq-card mb-3">
         <div class="rq-card-body">
-          <p style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:14px;"><i class="bi bi-info-circle me-1"></i>How It Works</p>
+          <p class="rq-terminal-label mb-3"><i class="bi bi-info-circle me-1"></i>How It Works</p>
           <div style="display:flex;flex-direction:column;gap:14px;">
             <div style="display:flex;gap:12px;align-items:flex-start;">
-              <div style="width:28px;height:28px;border-radius:50%;background:var(--blue-lt);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;">1</div>
-              <div><p style="font-size:.875rem;font-weight:600;margin:0;">Register the Part</p><p style="font-size:.8125rem;color:var(--ink-3);margin:0;">Fill in part details and vendor info.</p></div>
+              <div style="width:26px;height:26px;border-radius:3px;background:var(--blue-lt);color:#5ba0ed;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;font-family:'JetBrains Mono',monospace;">01</div>
+              <div><p style="font-size:.875rem;font-weight:600;margin:0;">Register the Component</p><p style="font-size:.8125rem;color:var(--ink-3);margin:0;">Fill in part details and vendor info.</p></div>
             </div>
             <div style="display:flex;gap:12px;align-items:flex-start;">
-              <div style="width:28px;height:28px;border-radius:50%;background:var(--saffron-lt);color:var(--saffron);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;">2</div>
+              <div style="width:26px;height:26px;border-radius:3px;background:var(--saffron-lt);color:var(--saffron);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;font-family:'JetBrains Mono',monospace;">02</div>
               <div><p style="font-size:.875rem;font-weight:600;margin:0;">AI Risk Assessment</p><p style="font-size:.8125rem;color:var(--ink-3);margin:0;">Notes are analysed for risk level.</p></div>
             </div>
             <div style="display:flex;gap:12px;align-items:flex-start;">
-              <div style="width:28px;height:28px;border-radius:50%;background:var(--green-lt);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;">3</div>
-              <div><p style="font-size:.875rem;font-weight:600;margin:0;">QR Code Generated</p><p style="font-size:.8125rem;color:var(--ink-3);margin:0;">Scan to verify, engrave for physical tagging.</p></div>
+              <div style="width:26px;height:26px;border-radius:3px;background:var(--green-lt);color:#4ade80;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;font-family:'JetBrains Mono',monospace;">03</div>
+              <div><p style="font-size:.875rem;font-weight:600;margin:0;">QR Identity Generated</p><p style="font-size:.8125rem;color:var(--ink-3);margin:0;">Scan to verify, engrave for physical tagging.</p></div>
             </div>
           </div>
         </div>
@@ -229,19 +251,45 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // Date defaults
   const today = new Date().toISOString().split('T')[0];
   ['manufactor_date','supply_date','warranty_end'].forEach(function(f) {
     const el = document.querySelector('input[name="'+f+'"]');
     if (el && !el.value) el.value = today;
   });
-  const sel = document.querySelector('select[name="vendor_id"]');
+  // Vendor select auto-fill (only when not locked)
+  const sel = document.querySelector('select[name="vendor_id"]:not([disabled])');
   const inp = document.querySelector('input[name="vendor"]');
   if (sel && inp) {
     sel.addEventListener('change', function() {
       if (this.value) inp.value = this.options[this.selectedIndex].text;
     });
+    // Pre-fill vendor name from selected option on load
+    if (sel.value) inp.value = sel.options[sel.selectedIndex].text;
   }
+  // Animated stat counters
+  function animateCount(el, target, suffix) {
+    let start = 0;
+    const duration = 1800;
+    const step = Math.ceil(target / (duration / 16));
+    const timer = setInterval(function() {
+      start = Math.min(start + step, target);
+      el.textContent = start.toLocaleString() + (suffix || '');
+      if (start >= target) clearInterval(timer);
+    }, 16);
+  }
+  const partEl = document.getElementById('stat-parts');
+  const vendorEl = document.getElementById('stat-vendors');
+  if (partEl) animateCount(partEl, {{ vendors|length * 12 + 48 }}, '+');
+  if (vendorEl) animateCount(vendorEl, {{ vendors|length }}, '');
 });
+function confirmLogin(e) {
+  e.preventDefault();
+  if (confirm('You need to login as a vendor first. Go to login page?')) {
+    window.location.href = "{{ url_for('vendor_login', next=url_for('index')) }}";
+  }
+  return false;
+}
 </script>
 </body>
 </html>

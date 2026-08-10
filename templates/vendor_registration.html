@@ -20,12 +20,12 @@
 
 <nav class="rq-topbar">
   <div class="rq-topbar-inner">
-    <a href="{{ url_for('index') }}" class="rq-brand">
+    <a href="{{ url_for('landing') }}" class="rq-brand">
       <img src="{{ url_for('static', filename='image/rail.png') }}" class="rq-brand-logo" alt="RailQR">
       <span class="rq-brand-name">Rail<span>QR</span></span>
     </a>
     <div class="rq-topbar-actions">
-      <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-house"></i> Home</a>
+      <a href="{{ url_for('landing') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-house"></i> Home</a>
       <a href="{{ url_for('vendor_login') }}" class="btn btn-light btn-sm"><i class="bi bi-person-circle"></i> Sign In</a>
     </div>
   </div>
@@ -110,7 +110,7 @@
 </div>
 
 <footer class="rq-footer" style="margin-top:0;">
-  © Indian Railways Fittings Department &nbsp;·&nbsp; <a href="{{ url_for('index') }}">Home</a>
+  © Indian Railways Fittings Department &nbsp;·&nbsp; <a href="{{ url_for('landing') }}">Home</a>
 </footer>
 </body>
 </html>

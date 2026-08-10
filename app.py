@@ -1538,7 +1538,12 @@ def download_vendor_gcode(vendor_id):
 
 
 # === Flask routes (main app) ===
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
+def landing():
+    return render_template('landing.html')
+
+
+@app.route('/entry', methods=['GET', 'POST'])
 def index():
     error = None
     
