@@ -24,6 +24,9 @@ Vendors can register, manage fittings, generate AI-styled QR codes, and transmit
 ### QR Code Engraving Simulation
 <img width="1280" height="680" alt="image" src="https://github.com/user-attachments/assets/e23b7309-2e42-41c0-b828-992afef1cd7e" />
 
+ ### Hardware (esp32) -Sofware pipeline
+![WhatsApp Image 2025-09-13 at 00 59 14_17ac0202](https://github.com/user-attachments/assets/175b9fa5-0be6-4daa-aa62-13a00f5d84a9)
+
 ### Marketplace Shop
 <img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/7ac098f9-65c8-4354-9182-89b93c026c5b" />
 
