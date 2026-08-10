@@ -22,6 +22,8 @@ def reset_databases():
 
 
 def seed():
+    import secrets
+    import random
     init_vendor_db()
     ensure_table_columns()
 
@@ -44,7 +46,7 @@ def seed():
             "South Eastern Railway",
             "HWH Division",
             "West Bengal, India",
-            datetime.now().date().isoformat(),
+            (datetime.now() - timedelta(days=120)).date().isoformat(),
             "Low",
         ),
     )
@@ -71,6 +73,8 @@ def seed():
         ("SER-HWH-BPAD-001", "Composite Brake Pad", "Brake Systems", 1450, 8, 32, "operational normally"),
         ("SER-HWH-CLIP-002", "Elastic Rail Clip", "Track Fittings", 220, 0, 180, "minor wear acceptable"),
         ("SER-HWH-PAD-003", "Rail Rubber Pad", "Track Fittings", 380, 5, 96, "good condition"),
+        ("SER-HWH-BOLT-004", "Heavy Duty Fish Bolt", "Track Fittings", 150, 0, 500, "no visible defects"),
+        ("SER-HWH-SENSOR-005", "Axle Counter Sensor", "Signaling", 8500, 10, 15, "requires calibration"),
     ]
 
     conn = sqlite3.connect(DB)
@@ -111,6 +115,60 @@ def seed():
                 stock,
             ),
         )
+
+    # Generate realistic historical orders for the analytics charts
+    months_back = 4
+    for m in range(months_back, -1, -1):
+        num_orders = 3
+        for i in range(num_orders):
+            order_date = datetime.now() - timedelta(days=(m * 30) + (i * 5))
+            order_no = f"ORD-{order_date.strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3).upper()}"
+            
+            items_to_buy = random.sample(products, random.randint(1, 3))
+            subtotal = 0
+            order_items = []
+            
+            for itm in items_to_buy:
+                sale_price = itm[3] * (1 - itm[4]/100)
+                qty = random.randint(10, 50)
+                line_total = sale_price * qty
+                subtotal += line_total
+                order_items.append((itm[0], itm[1], sale_price, qty, line_total))
+                
+            tax_total = subtotal * 0.05
+            grand_total = subtotal + tax_total
+            
+            status_choices = ['Completed', 'Delivered'] if m > 0 else ['Shipped', 'Placed', 'Packed']
+            
+            conn.execute(
+                """
+                INSERT INTO marketplace_orders
+                (order_no, customer_name, customer_email, customer_phone, shipping_address,
+                 payment_method, status, subtotal, discount_total, tax_total, shipping_total,
+                 grand_total, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    order_no, "Eastern Railways HQ", "procurement@easternrailways.in", "+91 80000 20002",
+                    "Fairlie Place, Kolkata", "NetBanking", random.choice(status_choices),
+                    subtotal, 0, tax_total, 0, grand_total, order_date.isoformat(timespec='seconds')
+                )
+            )
+            order_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            
+            for uid, item_type, sale_price, qty, line_total in order_items:
+                conn.execute(
+                    """
+                    INSERT INTO marketplace_order_items
+                    (order_id, uid, vendor_id, product_name, vendor, unit_price, quantity, line_total)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        order_id, uid, str(vendor_id), item_type, "Howrah Rail Components",
+                        sale_price, qty, line_total
+                    )
+                )
+
     conn.commit()
     conn.close()
 
