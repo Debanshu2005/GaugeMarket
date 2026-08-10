@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-09T18:52:16.778Z",
-  "generatedAtEpochMs": 1786301536778,
+  "generatedAt": "2026-08-10T09:48:47.707Z",
+  "generatedAtEpochMs": 1786355327707,
   "generator": {
     "name": "Code Janitor",
     "feature": "workspace-memory"
@@ -14,40 +14,40 @@
   "workspace": {
     "name": "qr demo",
     "root": "d:\\CityGrid\\my-project\\qr demo",
-    "activeFile": "ai_module.py",
-    "refreshReason": "startup",
+    "activeFile": "templates/admin_login.html",
+    "refreshReason": "tracked-change",
     "outputFiles": {
       "markdown": "graphify-out/WORKSPACE_MEMORY.md",
       "markdownMirror": "workspacememory.md",
       "structuredManifest": "workspace.json"
     },
     "suggestedStartingPoints": [
-      "ai_module.py",
-      ".gitignore",
-      "README.md"
+      "templates/admin_login.html",
+      "README.md",
+      ".gitignore"
     ],
     "stats": {
-      "totalFiles": 370,
+      "totalFiles": 395,
       "topLevelAreas": [
         {
           "name": "static",
-          "count": 330
+          "count": 333
         },
         {
           "name": "[root]",
-          "count": 16
+          "count": 26
         },
         {
           "name": "templates",
-          "count": 14
+          "count": 19
+        },
+        {
+          "name": "scripts",
+          "count": 10
         },
         {
           "name": "_archive",
           "count": 4
-        },
-        {
-          "name": "scripts",
-          "count": 3
         },
         {
           "name": ".vercel",
@@ -61,35 +61,35 @@
       "primaryFileTypes": [
         {
           "name": ".png",
-          "count": 320
+          "count": 322
+        },
+        {
+          "name": ".py",
+          "count": 22
         },
         {
           "name": ".html",
-          "count": 15
+          "count": 20
         },
         {
           "name": ".gcode",
           "count": 9
         },
         {
-          "name": ".py",
-          "count": 9
-        },
-        {
           "name": "[no extension]",
-          "count": 4
+          "count": 5
         },
         {
           "name": ".json",
-          "count": 3
+          "count": 4
         },
         {
           "name": ".md",
-          "count": 3
+          "count": 4
         },
         {
-          "name": ".db",
-          "count": 2
+          "name": ".txt",
+          "count": 3
         }
       ],
       "keyFiles": [
@@ -170,6 +170,12 @@
           "isKeyFile": false
         },
         {
+          "path": "dedup.py",
+          "topLevelArea": "[root]",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
           "path": "fittings_ai.log",
           "topLevelArea": "[root]",
           "extension": ".log",
@@ -183,6 +189,30 @@
         },
         {
           "path": "incremental_push.py",
+          "topLevelArea": "[root]",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "LICENSE",
+          "topLevelArea": "[root]",
+          "extension": "[no extension]",
+          "isKeyFile": false
+        },
+        {
+          "path": "out.txt",
+          "topLevelArea": "[root]",
+          "extension": ".txt",
+          "isKeyFile": false
+        },
+        {
+          "path": "patch_admin_auth.py",
+          "topLevelArea": "[root]",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "patch_fixes.py",
           "topLevelArea": "[root]",
           "extension": ".py",
           "isKeyFile": false
@@ -206,7 +236,31 @@
           "isKeyFile": false
         },
         {
+          "path": "scripts/add_intelligence.py",
+          "topLevelArea": "scripts",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "scripts/add_landing.py",
+          "topLevelArea": "scripts",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "scripts/audit_fix.py",
+          "topLevelArea": "scripts",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
           "path": "scripts/create_demo_data.py",
+          "topLevelArea": "scripts",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "scripts/fix_landing_links.py",
           "topLevelArea": "scripts",
           "extension": ".py",
           "isKeyFile": false
@@ -219,6 +273,24 @@
         },
         {
           "path": "scripts/import sqlite3.py",
+          "topLevelArea": "scripts",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "scripts/inject_hooks.py",
+          "topLevelArea": "scripts",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "scripts/inject_routes.py",
+          "topLevelArea": "scripts",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "scripts/patch_app.py",
           "topLevelArea": "scripts",
           "extension": ".py",
           "isKeyFile": false
@@ -2192,6 +2264,24 @@
           "isKeyFile": false
         },
         {
+          "path": "static/qrcodes/SER-HWH-BOLT-004_display.png",
+          "topLevelArea": "static",
+          "extension": ".png",
+          "isKeyFile": false
+        },
+        {
+          "path": "static/qrcodes/SER-HWH-BOLT-004_engrave.png",
+          "topLevelArea": "static",
+          "extension": ".png",
+          "isKeyFile": false
+        },
+        {
+          "path": "static/rail.css",
+          "topLevelArea": "static",
+          "extension": ".css",
+          "isKeyFile": false
+        },
+        {
           "path": "static/vendor_gcode/vendor_2_engrave.gcode",
           "topLevelArea": "static",
           "extension": ".gcode",
@@ -2201,6 +2291,24 @@
           "path": "static/vendor_qrcodes/vendor_2_engrave.png",
           "topLevelArea": "static",
           "extension": ".png",
+          "isKeyFile": false
+        },
+        {
+          "path": "templates/admin_audit.html",
+          "topLevelArea": "templates",
+          "extension": ".html",
+          "isKeyFile": false
+        },
+        {
+          "path": "templates/admin_intelligence.html",
+          "topLevelArea": "templates",
+          "extension": ".html",
+          "isKeyFile": false
+        },
+        {
+          "path": "templates/admin_login.html",
+          "topLevelArea": "templates",
+          "extension": ".html",
           "isKeyFile": false
         },
         {
@@ -2228,7 +2336,19 @@
           "isKeyFile": false
         },
         {
+          "path": "templates/component_passport.html",
+          "topLevelArea": "templates",
+          "extension": ".html",
+          "isKeyFile": false
+        },
+        {
           "path": "templates/index.html",
+          "topLevelArea": "templates",
+          "extension": ".html",
+          "isKeyFile": false
+        },
+        {
+          "path": "templates/landing.html",
           "topLevelArea": "templates",
           "extension": ".html",
           "isKeyFile": false
@@ -2288,6 +2408,24 @@
           "isKeyFile": false
         },
         {
+          "path": "test_intelligence.py",
+          "topLevelArea": "[root]",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "test_ondemand.py",
+          "topLevelArea": "[root]",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
+          "path": "test_routes.py",
+          "topLevelArea": "[root]",
+          "extension": ".py",
+          "isKeyFile": false
+        },
+        {
           "path": "tms.py",
           "topLevelArea": "[root]",
           "extension": ".py",
@@ -2316,6 +2454,18 @@
           "topLevelArea": "[root]",
           "extension": ".json",
           "isKeyFile": false
+        },
+        {
+          "path": "workspace.json",
+          "topLevelArea": "[root]",
+          "extension": ".json",
+          "isKeyFile": false
+        },
+        {
+          "path": "workspacememory.md",
+          "topLevelArea": "[root]",
+          "extension": ".md",
+          "isKeyFile": false
         }
       ]
     }
@@ -2325,39 +2475,91 @@
     "error": "package.json was not found."
   },
   "currentStack": {
-    "lastActivityAt": "",
-    "trackedChangeCount": 0,
-    "trackedFileSnapshotCount": 0,
+    "lastActivityAt": "2026-08-10T09:48:44.809Z",
+    "trackedChangeCount": 1,
+    "trackedFileSnapshotCount": 1,
     "changeTypeCounts": {
-      "save": 0,
+      "save": 1,
       "create": 0,
       "delete": 0,
       "rename": 0
     }
   },
-  "trackedSnapshots": [],
-  "recentChanges": [],
-  "hotFiles": [],
+  "trackedSnapshots": [
+    {
+      "filePath": "README.md",
+      "updatedAt": 1786355324809,
+      "lineCount": 220,
+      "charCount": 7519,
+      "hash": "21935f856084",
+      "preview": "# GaugeMarket — Railway QR Vendor & Marketplace Portal / This repository contains the full-stack **Vendor Portal + Marketplace** for the Railway QR Project. / Vendors can register, manage fittings, generate AI-styled..."
+    }
+  ],
+  "recentChanges": [
+    {
+      "type": "save",
+      "path": "README.md",
+      "toPath": "",
+      "summary": "Line 146: replaced 1 line with 1 line.",
+      "recordedAt": "2026-08-10T09:48:44.809Z",
+      "recordedAtEpochMs": 1786355324809,
+      "before": {
+        "kind": "text",
+        "lineCount": 220,
+        "charCount": 7501,
+        "hash": "3ab0fd5d0f64",
+        "preview": "# GaugeMarket — Railway QR Vendor & Marketplace Portal / This repository contains the full-stack **Vendor Portal + Marketplace** for the Railway QR Project. / Vendors can register, manage fittings, generate AI-styled...",
+        "updatedAt": 1786355324809
+      },
+      "after": {
+        "kind": "text",
+        "lineCount": 220,
+        "charCount": 7519,
+        "hash": "21935f856084",
+        "preview": "# GaugeMarket — Railway QR Vendor & Marketplace Portal / This repository contains the full-stack **Vendor Portal + Marketplace** for the Railway QR Project. / Vendors can register, manage fittings, generate AI-styled...",
+        "updatedAt": 1786355324809
+      },
+      "diff": {
+        "lineStart": 146,
+        "removedLines": 1,
+        "addedLines": 1,
+        "summary": "Line 146: replaced 1 line with 1 line.",
+        "beforeFragment": "://localhost:5000",
+        "afterFragment": "s://rail-qr-marketplace.vercel.app/"
+      }
+    }
+  ],
+  "hotFiles": [
+    {
+      "filePath": "README.md",
+      "count": 1
+    }
+  ],
   "git": {
     "available": true,
     "branch": "main",
-    "headSummary": "2026-08-10 5467e38 feat: add web interface templates",
-    "statusSummary": "7 untrackeds",
-    "changedFileCount": 7,
+    "headSummary": "2026-08-10 ad837c5 Add create_demo_data.py and audit_fix.py",
+    "statusSummary": "6 modifieds, 6 untrackeds",
+    "changedFileCount": 12,
     "statusLines": [
-      "?? __tests__/",
-      "?? ai_module.py",
-      "?? app.py",
-      "?? scripts/",
-      "?? static/",
-      "?? tms.py",
-      "?? udm.py"
+      "M .gitignore",
+      "M README.md",
+      "M app.py",
+      "M templates/admin.html",
+      "M templates/index.html",
+      "M templates/vendor_dashboard.html",
+      "?? LICENSE",
+      "?? dedup.py",
+      "?? out.txt",
+      "?? patch_admin_auth.py",
+      "?? patch_fixes.py",
+      "?? templates/admin_login.html"
     ],
     "error": ""
   },
   "github": {
-    "available": false,
-    "summary": "GitHub API request failed with 404. Not Found Configure codeJanitor.github.apiToken or GITHUB_TOKEN if the repository is private or rate-limited."
+    "available": true,
+    "summary": "GitHub Repository: Debanshu2005/GaugeMarket\nVisibility: public | Default branch: main\nStars: 0 | Forks: 0 | Open issues: 0\n\nLatest commit on main:\n- 7a08738 by Debanshu Sarkar on 2026-08-10\n  Replace outdated images in README.md Updated images in the README for better clarity.\n\nURL: https://github.com/Debanshu2005/GaugeMarket"
   },
   "graphify": {
     "reportAvailable": false,
