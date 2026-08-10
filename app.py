@@ -1889,12 +1889,18 @@ def checkout():
         conn = get_db_connection()
         try:
             c = conn.cursor()
+            # Atomic stock check-and-reserve: use UPDATE with WHERE stock >= qty
+            # to prevent overselling under concurrent requests
             for item in items:
-                c.execute("SELECT stock FROM fittings WHERE uid=?", (item['uid'],))
-                stock_row = c.fetchone()
-                if not stock_row or parse_int(stock_row['stock']) < item['quantity']:
+                c.execute(
+                    "UPDATE fittings SET stock = stock - ? WHERE uid=? AND stock >= ?",
+                    (item['quantity'], item['uid'], item['quantity'])
+                )
+                if c.rowcount == 0:
+                    conn.rollback()
                     conn.close()
-                    return render_template('checkout.html', items=items, totals=totals, error=f"{item['item_type']} does not have enough stock.")
+                    return render_template('checkout.html', items=items, totals=totals,
+                                           error=f"{item['item_type']} does not have enough stock.")
 
             order_no = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3).upper()}"
             c.execute("""
@@ -1919,7 +1925,6 @@ def checkout():
                     order_id, item['uid'], item.get('vendor_id'), item['item_type'], item.get('vendor'),
                     item['sale_price'], item['quantity'], item['line_total']
                 ))
-                c.execute("UPDATE fittings SET stock = MAX(COALESCE(stock, 0) - ?, 0) WHERE uid=?", (item['quantity'], item['uid']))
 
             conn.commit()
         except Exception as e:
@@ -1982,30 +1987,8 @@ def track_order():
 
 @app.route('/vendor/order/<order_no>/status', methods=['POST'])
 def update_order_status(order_no):
-    if 'vendor_id' not in session:
-        return redirect(url_for('vendor_login'))
-
-    next_status = request.form.get('status', 'Placed')
-    allowed = {'Placed', 'Accepted', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered', 'Completed', 'Cancelled'}
-    if next_status not in allowed:
-        next_status = 'Placed'
-
-    vendor_id = str(session['vendor_id'])
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("""
-        SELECT o.id
-        FROM marketplace_orders o
-        JOIN marketplace_order_items i ON i.order_id = o.id
-        WHERE o.order_no=? AND i.vendor_id=?
-        LIMIT 1
-    """, (order_no, vendor_id))
-    owned = c.fetchone()
-    if owned:
-        c.execute("UPDATE marketplace_orders SET status=? WHERE order_no=?", (next_status, order_no))
-        conn.commit()
-    conn.close()
-    return redirect(url_for('vendor_dashboard', msg=f"Order {order_no} updated."))
+    """Delegates to the guarded v2 handler with state machine enforcement."""
+    return update_order_status_v2(order_no)
 
 @app.route('/reviews/<uid>', methods=['POST'])
 def add_review(uid):
@@ -2035,14 +2018,32 @@ def add_review(uid):
 def admin_dashboard():
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT COUNT(*), COALESCE(SUM(grand_total), 0) FROM marketplace_orders")
-    order_count, revenue = c.fetchone()
+
+    # --- Core metrics: all derived from the same marketplace_orders table ---
+    c.execute("""
+        SELECT
+            COUNT(*) AS order_count,
+            COALESCE(SUM(grand_total), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN status NOT IN ('Cancelled') THEN grand_total ELSE 0 END), 0) AS confirmed_revenue
+        FROM marketplace_orders
+    """)
+    row = c.fetchone()
+    order_count = row['order_count']
+    revenue = row['revenue']
+    confirmed_revenue = row['confirmed_revenue']
+
     c.execute("SELECT COUNT(*) FROM fittings")
     product_count = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM fittings WHERE COALESCE(stock, 0) <= 5")
+
+    # Low stock: products with price > 0 (listed) and stock <= 5
+    c.execute("SELECT COUNT(*) FROM fittings WHERE COALESCE(stock, 0) <= 5 AND COALESCE(price, 0) > 0")
     low_stock_count = c.fetchone()[0]
+
+    # Status breakdown — same orders as order_count above
     c.execute("SELECT status, COUNT(*) FROM marketplace_orders GROUP BY status ORDER BY status")
     status_counts = c.fetchall()
+
+    # Recent orders — same table, consistent with order_count
     c.execute("""
         SELECT o.order_no, o.customer_name, o.status, o.grand_total, o.created_at
         FROM marketplace_orders o
@@ -2050,18 +2051,44 @@ def admin_dashboard():
         LIMIT 20
     """)
     recent_orders = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
+
+    # Category inventory — all products, consistent with product_count
     c.execute("""
-        SELECT category, COUNT(*) AS product_count, COALESCE(SUM(stock), 0) AS stock_count
+        SELECT COALESCE(category, 'Uncategorized') AS category,
+               COUNT(*) AS product_count,
+               COALESCE(SUM(stock), 0) AS stock_count
         FROM fittings
-        GROUP BY category
+        GROUP BY COALESCE(category, 'Uncategorized')
         ORDER BY product_count DESC
         LIMIT 8
     """)
     categories = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
+
+    # Vendor analytics: revenue per vendor from order items
+    c.execute("""
+        SELECT i.vendor, i.vendor_id,
+               COALESCE(SUM(i.line_total), 0) AS revenue,
+               COUNT(DISTINCT i.order_id) AS order_count,
+               COALESCE(SUM(i.quantity), 0) AS units_sold
+        FROM marketplace_order_items i
+        JOIN marketplace_orders o ON o.id = i.order_id
+        WHERE o.status NOT IN ('Cancelled')
+        GROUP BY i.vendor_id, i.vendor
+        ORDER BY revenue DESC
+        LIMIT 10
+    """)
+    vendor_analytics = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
+
+    # High-risk component count
+    c.execute("SELECT COUNT(*) FROM fittings WHERE risk = 'High'")
+    high_risk_count = c.fetchone()[0]
+
     conn.close()
 
     conn_v = get_vendor_db_connection()
     seller_count = conn_v.execute("SELECT COUNT(*) FROM vendors").fetchone()[0]
+
+    # Divisions: group vendors by their declared division
     division_rows = conn_v.execute("""
         SELECT railway_zone, railway_division, supply_region, COUNT(*) AS seller_count
         FROM vendors
@@ -2075,13 +2102,16 @@ def admin_dashboard():
         'admin.html',
         order_count=order_count,
         revenue=revenue,
+        confirmed_revenue=confirmed_revenue,
         product_count=product_count,
         low_stock_count=low_stock_count,
         seller_count=seller_count,
         status_counts=status_counts,
         recent_orders=recent_orders,
         categories=categories,
-        divisions=divisions
+        divisions=divisions,
+        vendor_analytics=vendor_analytics,
+        high_risk_count=high_risk_count,
     )
 
 @app.route('/generated/qrcodes/<path:filename>')
