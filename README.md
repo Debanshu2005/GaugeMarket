@@ -20,28 +20,30 @@ If you have seeded the database using `python scripts/create_demo_data.py`, you 
 ## Screenshots
 
 ### Vendor Registration Page
-> *Vendors sign up with company details, contact info, railway zone/division, and supply region.*
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/8b1a14f6-f125-4d22-9cd1-08677d3c6603" />
+
 
 ### Vendor Login Page
-> *Secure password-hashed login for returning vendors.*
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/3e867776-35bf-401c-b376-974be1bc97ef" />
+
 
 ### Vendor Dashboard
-> *Overview of listed products, revenue chart, incoming orders, and vendor QR code for identification.*
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/047047c1-9eb5-4094-8109-4b0ee1d1c0e5" />
 
 ### Data Entry Form
-> *Add new fittings with UID, type, lot, supply date, warranty, manufacturer info, and risk fields.*
-
-### QR Code Generation
-> *AI-styled QR codes with embedded railway logo, generated for each fitting and vendor.*
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/9b6d844b-79c9-46e0-a651-b2db22393524" />
 
 ### QR Code Engraving Simulation
-> *G-code preview sent over WebSocket to an ESP32-connected laser engraver.*
+<img width="1280" height="680" alt="image" src="https://github.com/user-attachments/assets/e23b7309-2e42-41c0-b828-992afef1cd7e" />
+
+ ### Hardware (esp32) -Sofware pipeline
+<img width="1280" height="680" alt="image" src="https://github.com/user-attachments/assets/ebafc741-d78e-411a-bdcd-8fd3fa5d8ae0" />
 
 ### Marketplace Shop
-> *Browse railway fittings by category, filter/sort, view pricing with discount badges, and add to cart.*
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/7ac098f9-65c8-4354-9182-89b93c026c5b" />
 
 ### Admin Dashboard
-> *Full analytics: order count, revenue, product inventory, low-stock alerts, and railway division breakdown.*
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/9a7d4138-9b73-4cc9-a65a-f35dbca6e55d" />
 
 ---
 

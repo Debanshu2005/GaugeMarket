@@ -25,6 +25,11 @@
     </div>
     <div class="rq-topbar-actions">
       <a href="{{ url_for('cart') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-cart3"></i> Cart</a>
+      {% if session.get('admin_logged_in') %}
+      <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-shield-lock"></i> Admin Logout</a>
+      {% else %}
+      <a href="{{ url_for('admin_login') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-shield-lock"></i> Admin</a>
+      {% endif %}
       {% if session.get('vendor_id') %}
       <a href="{{ url_for('vendor_dashboard') }}" class="btn btn-light btn-sm"><i class="bi bi-speedometer2"></i> Dashboard</a>
       {% else %}
@@ -64,12 +69,12 @@
 <!-- MAIN CONTENT -->
 <div class="container py-4">
 
-  {% if not session.get('vendor_id') %}
+  {% if not session.get('vendor_id') and not session.get('admin_logged_in') %}
   <div class="alert mb-4" style="background:rgba(255,180,0,.08);border:1.5px solid rgba(255,180,0,.3);color:#f5c842;border-radius:var(--radius);">
     <i class="bi bi-lock-fill me-2"></i>
-    <strong>Vendor login required</strong> to register parts.
-    <a href="{{ url_for('vendor_login', next=url_for('index')) }}" class="btn btn-saffron btn-sm ms-3"><i class="bi bi-box-arrow-in-right"></i> Login</a>
-    <a href="{{ url_for('vendor_register') }}" class="btn btn-outline-light btn-sm ms-1">Register</a>
+    <strong>Login required</strong> to register parts.
+    <a href="{{ url_for('vendor_login', next=url_for('index')) }}" class="btn btn-saffron btn-sm ms-3"><i class="bi bi-box-arrow-in-right"></i> Vendor Login</a>
+    <a href="{{ url_for('admin_login', next=url_for('index')) }}" class="btn btn-outline-light btn-sm ms-1"><i class="bi bi-shield-lock"></i> Admin Login</a>
   </div>
   {% endif %}
 
@@ -88,7 +93,7 @@
           </div>
         </div>
         <div class="rq-card-body">
-          <form method="POST" {% if not session.get('vendor_id') %}onsubmit="return confirmLogin(event)"{% endif %}>
+          <form method="POST" {% if not session.get('vendor_id') and not session.get('admin_logged_in') %}onsubmit="return confirmLogin(event)"{% endif %}>
 
             <div class="row g-3">
               <div class="col-md-6">
@@ -285,7 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 function confirmLogin(e) {
   e.preventDefault();
-  if (confirm('You need to login as a vendor first. Go to login page?')) {
+  if (confirm('You need to login first to register a part. Go to login page?')) {
     window.location.href = "{{ url_for('vendor_login', next=url_for('index')) }}";
   }
   return false;

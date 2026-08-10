@@ -88,7 +88,41 @@
         <div class="rq-metric animate-fade-in-up delay-400" style="border-left-color:{% if low_stock_count > 0 %}var(--amber){% else %}var(--green){% endif %};">
           <div class="rq-metric-label"><i class="bi bi-exclamation-triangle me-1"></i>Low Stock</div>
           <div class="rq-metric-value rq-stat-counter" data-target="{{ low_stock_count }}" style="color:{% if low_stock_count > 0 %}#fbbf24{% else %}#4ade80{% endif %};">0</div>
-          <div class="rq-metric-sub">Products ≤ 5 units</div>
+          <div class="rq-metric-sub">Listed products ≤ 5 units</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECONDARY METRICS -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="rq-metric animate-fade-in-up delay-100">
+          <div class="rq-metric-label"><i class="bi bi-box-seam me-1"></i>Components</div>
+          <div class="rq-metric-value rq-stat-counter" data-target="{{ product_count }}">0</div>
+          <div class="rq-metric-sub">Total registered</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="rq-metric animate-fade-in-up delay-200" style="border-left-color:{% if high_risk_count > 0 %}var(--red,#f87171){% else %}var(--green){% endif %};">
+          <div class="rq-metric-label"><i class="bi bi-shield-exclamation me-1"></i>High Risk</div>
+          <div class="rq-metric-value rq-stat-counter" data-target="{{ high_risk_count }}" style="color:{% if high_risk_count > 0 %}#f87171{% else %}#4ade80{% endif %};">0</div>
+          <div class="rq-metric-sub"><a href="{{ url_for('admin_intelligence') }}" style="color:inherit;">View intelligence</a></div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="rq-metric animate-fade-in-up delay-300">
+          <div class="rq-metric-label"><i class="bi bi-currency-rupee me-1"></i>Confirmed Revenue</div>
+          <div class="rq-metric-value rq-stat-counter" data-target="{{ (confirmed_revenue or 0)|int }}" data-prefix="₹">₹0</div>
+          <div class="rq-metric-sub">Excl. cancelled orders</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="rq-metric animate-fade-in-up delay-400">
+          <div class="rq-metric-label"><i class="bi bi-graph-up me-1"></i>Intelligence</div>
+          <div class="rq-metric-value" style="font-size:1rem;padding-top:4px;">
+            <a href="{{ url_for('admin_intelligence') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-graph-up"></i> View</a>
+          </div>
+          <div class="rq-metric-sub">Risk &amp; inspection data</div>
         </div>
       </div>
     </div>
@@ -188,6 +222,31 @@
             {% endif %}
           </div>
         </div>
+
+        <!-- VENDOR ANALYTICS -->
+        {% if vendor_analytics %}
+        <div class="rq-card mt-4 animate-fade-in-up delay-500">
+          <div class="rq-card-header"><h2><i class="bi bi-building me-2" style="color:var(--blue);"></i>Vendor Revenue</h2><span style="font-size:.8125rem;color:var(--ink-3);">Non-cancelled orders</span></div>
+          <div class="rq-card-body">
+            {% set max_vr = namespace(val=1) %}
+            {% for v in vendor_analytics %}{% if v.revenue > max_vr.val %}{% set max_vr.val = v.revenue %}{% endif %}{% endfor %}
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              {% for v in vendor_analytics %}
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  <span style="font-weight:600;font-size:.875rem;">{{ v.vendor or 'Unknown' }}</span>
+                  <div style="display:flex;gap:6px;">
+                    <span class="rq-badge rq-badge-green rq-mono">₹{{ '%.0f'|format(v.revenue) }}</span>
+                    <span class="rq-badge rq-badge-navy">{{ v.order_count }} orders</span>
+                  </div>
+                </div>
+                <div class="rq-bar-track"><div class="rq-bar-fill" style="width:{{ ((v.revenue / max_vr.val) * 100)|int }}%;"></div></div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
       </div>
 
       <div class="col-lg-5">
