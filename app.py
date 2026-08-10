@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, session
 import secrets
-from flask import session
 import sqlite3
 import os
 import shutil
@@ -32,7 +31,6 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import asyncio
 import websockets
-import secrets
 
 # External modules (assumed available)
 from udm import push_to_udm
@@ -40,7 +38,8 @@ from tms import push_to_tms
 from ai_module import get_risk_level, update_all_risks, QRAnomalyDetector
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(16))
+# Use a stable fallback so sessions survive restarts during demo
+app.secret_key = os.environ.get("SECRET_KEY", "railqr-hackathon-stable-key-2025")
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin1234")
 
@@ -601,12 +600,6 @@ def determine_lifecycle_status(component):
     return 'REGISTERED'
 
 
-def get_vendor_db_connection():
-    conn = sqlite3.connect(VENDOR_DB)
-    conn.row_factory = sqlite3.Row   # 🔑 this is the fix
-    return conn
-
-
 def hash_password(password):
     """Hash a password for storing."""
     salt = secrets.token_hex(16)
@@ -838,39 +831,41 @@ def calculate_vendor_risk(vendor):
         return "Low"
 
 # === QR Content Generation ===
-def generate_qr_content(uid, item_type, vendor, lot, supply_date, warranty_end, manufactor_date, manufactor_number, notes, risk, vendor_risk,vendor_email=""):
-    qr_payload = {
-        "uid": uid,
-        "item_type": item_type,
-        "vendor": vendor,
-        "lot": lot,
-        "supply_date": supply_date,
-        "warranty_end": warranty_end,
-        "manufactor_date": manufactor_date,
-        "manufactor_number": manufactor_number,
-        "vendor_email": vendor_email,
-        "notes": notes,
-        "risk": risk,
-        "vendor_risk": vendor_risk,
-        
-    }
-    return json.dumps(qr_payload)
+def generate_qr_content(uid, item_type=None, vendor=None, lot=None, supply_date=None,
+                        warranty_end=None, manufactor_date=None, manufactor_number=None,
+                        notes=None, risk=None, vendor_risk=None, vendor_email=""):
+    """Generate a secure public passport URL as QR content - no sensitive data embedded."""
+    base_url = os.environ.get("PUBLIC_BASE_URL", "https://rail-qr-marketplace.vercel.app")
+    return f"{base_url}/component/{uid}"
 
-# === helper to generate base64 inline QR for templates ===
+def generate_vendor_qr_content(vendor):
+    """Generate a public vendor profile URL as QR content."""
+    base_url = os.environ.get("PUBLIC_BASE_URL", "https://rail-qr-marketplace.vercel.app")
+    return f"{base_url}/vendor/{vendor.get('id')}"
+
+
 def generate_qr_image_base64(qr_content):
-    qr = qrcode.QRCode(box_size=8, border=2)
+    """Generate a QR code and return it as a base64-encoded PNG string."""
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=8,
+        border=4,
+    )
     qr.add_data(qr_content)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
     buf = io.BytesIO()
     img.save(buf, format="PNG")
-    buf.seek(0)
-    b64 = base64.b64encode(buf.read()).decode('ascii')
-    return b64
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
 
-# === Create anime-themed QR code with logo ===
-def create_anime_qr_with_logo(qr_content, logo_path=None):
-    """Create an anime-themed QR code with optional logo"""
+
+def save_qr_image(uid, qr_content):
+    """Generate display + engrave QR images for a component. Returns (display_path, engrave_path)."""
+    display_path = os.path.join(qr_dir, f"{uid}_display.png")
+    engrave_path = os.path.join(qr_dir, f"{uid}_engrave.png")
+
+    # --- Display QR (coloured, with logo if available) ---
     try:
         qr = qrcode.QRCode(
             version=1,
@@ -880,149 +875,48 @@ def create_anime_qr_with_logo(qr_content, logo_path=None):
         )
         qr.add_data(qr_content)
         qr.make(fit=True)
+        img_display = qr.make_image(fill_color="#1a2744", back_color="white").convert("RGBA")
 
-        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+        # Embed railway logo if available
+        if os.path.exists(AI_QR_EMBED_IMAGE):
+            try:
+                logo = Image.open(AI_QR_EMBED_IMAGE).convert("RGBA")
+                qr_w, qr_h = img_display.size
+                logo_size = qr_w // 5
+                logo = logo.resize((logo_size, logo_size), Image.LANCZOS)
+                pos = ((qr_w - logo_size) // 2, (qr_h - logo_size) // 2)
+                img_display.paste(logo, pos, logo)
+            except Exception:
+                pass
 
-        # Apply anime-style effects if requested
-        img = apply_anime_effects(img)
-
-        # Add logo (logo is mandatory per your instruction)
-        if logo_path:
-            if os.path.exists(logo_path):
-                img = add_logo_to_qr(img, logo_path)
-            else:
-                print(f"[Logo] Logo file not found at {logo_path} (logo is required). Proceeding without visual logo overlay.")
-        return img
+        img_display.convert("RGB").save(display_path)
     except Exception as e:
-        print(f"Anime QR creation failed: {e}")
-        return qrcode.make(qr_content).convert('RGB')
+        print(f"[QR Display] {e}")
+        # Fallback: plain QR
+        qr = qrcode.make(qr_content)
+        qr.save(display_path)
 
-def apply_anime_effects(img):
-    """Apply anime-style visual effects to the QR code"""
+    # --- Engrave QR (strict 1-bit B/W) ---
     try:
-        img_array = np.array(img)
-        h, w = img_array.shape[:2]
-        for i in range(h):
-            for j in range(w):
-                if img_array[i, j, 0] < 128:  # Dark pixels
-                    if (i + j) % 4 == 0:
-                        img_array[i, j] = [50, 100, 200]
-                    elif (i + j) % 4 == 1:
-                        img_array[i, j] = [200, 100, 150]
-                else:
-                    img_array[i, j] = [245, 230, 240]
-        img = Image.fromarray(img_array.astype('uint8'))
-        draw = ImageDraw.Draw(img)
-        width, height = img.size
-        border_color = (255, 150, 200)
-        draw.rectangle([0, 0, width-1, height-1], outline=border_color, width=3)
-        corner_size = 15
-        for x, y in [(0, 0), (width-corner_size, 0), (0, height-corner_size), (width-corner_size, height-corner_size)]:
-            draw.ellipse([x, y, x+corner_size, y+corner_size], fill=border_color)
-        return img
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_content)
+        qr.make(fit=True)
+        img_engrave = qr.make_image(fill_color="black", back_color="white").convert("L")
+        img_engrave = img_engrave.point(lambda p: 0 if p < 128 else 255, "1")
+        img_engrave.save(engrave_path)
     except Exception as e:
-        print(f"Anime effects failed: {e}")
-        return img
+        print(f"[QR Engrave] {e}")
+        import shutil as _sh
+        if os.path.exists(display_path):
+            _sh.copy(display_path, engrave_path)
 
-def add_logo_to_qr(qr_img, logo_path):
-    """Add logo to the center of QR code"""
-    try:
-        logo = Image.open(logo_path)
-        base_width = min(qr_img.size[0] // 5, qr_img.size[1] // 5)
-        wpercent = (base_width / float(logo.size[0]))
-        hsize = int((float(logo.size[1]) * float(wpercent)))
-        logo = logo.resize((base_width, hsize), Image.LANCZOS)
+    return display_path, engrave_path
 
-        pos = ((qr_img.size[0] - logo.size[0]) // 2,
-               (qr_img.size[1] - logo.size[1]) // 2)
-
-        if logo.mode != 'RGBA':
-            logo = logo.convert('RGBA')
-
-        white_bg = Image.new('RGBA', logo.size, (255, 255, 255, 255))
-        white_bg.paste(logo, (0, 0), logo if logo.mode == 'RGBA' else None)
-
-        # Ensure QR image is RGBA to preserve transparency if merging
-        if qr_img.mode != 'RGBA':
-            qr_img = qr_img.convert('RGBA')
-        qr_img.paste(white_bg, pos, white_bg)
-        return qr_img.convert('RGB')
-    except Exception as e:
-        print(f"Logo addition failed: {e}")
-        return qr_img
-
-# === Centralized QR image saver (creates display + engrave) ===
-def save_qr_image(uid, qr_content):
-    """
-    Saves two QR images:
-    - <uid>_display.png (pink background + logo) for UI
-    - <uid>_engrave.png (white background + logo, 1-bit B/W) for laser engraving
-    Returns (display_path, engrave_path)
-    """
-    qr_path_display = os.path.join(qr_dir, f"{uid}_display.png")
-    qr_path_engrave = os.path.join(qr_dir, f"{uid}_engrave.png")
-
-    # Generate base QR
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_H,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(qr_content)
-    qr.make(fit=True)
-
-    # 1) Display QR (pink background)
-    try:
-        if USE_AI_QR:
-            # attempt an "artistic/anime" style first
-            img_disp = create_anime_qr_with_logo(qr_content, AI_QR_EMBED_IMAGE)
-        else:
-            img_disp = qr.make_image(fill_color="black", back_color="pink").convert("RGB")
-            if AI_QR_EMBED_IMAGE and os.path.exists(AI_QR_EMBED_IMAGE):
-                img_disp = add_logo_to_qr(img_disp, AI_QR_EMBED_IMAGE)
-        img_disp.save(qr_path_display)
-        print(f"[QR] Display QR saved at {qr_path_display}")
-    except Exception as e:
-        print(f"[save_qr_image] display generation failed: {e}")
-        img_disp = qr.make_image(fill_color="black", back_color="pink").convert("RGB")
-        if AI_QR_EMBED_IMAGE and os.path.exists(AI_QR_EMBED_IMAGE):
-            img_disp = add_logo_to_qr(img_disp, AI_QR_EMBED_IMAGE)
-        img_disp.save(qr_path_display)
-
-    # 2) Engrave QR (strict black/white, with logo area white to keep scannable)
-    try:
-        img_eng = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-        # Add logo (mandatory) on engrave image as well
-        if AI_QR_EMBED_IMAGE and os.path.exists(AI_QR_EMBED_IMAGE):
-            img_eng = add_logo_to_qr(img_eng, AI_QR_EMBED_IMAGE)
-        # Force strict B/W (1-bit) - helps reduce g-code size and ensures engraving clarity
-        img_eng = img_eng.convert("L").point(lambda p: 0 if p < 128 else 255, "1")
-        img_eng.save(qr_path_engrave)
-        print(f"[QR] Engrave QR saved at {qr_path_engrave}")
-    except Exception as e:
-        print(f"[save_qr_image] engrave generation failed: {e}")
-        img_eng = qr.make_image(fill_color="black", back_color="white").convert("L").point(lambda p: 0 if p < 128 else 255, "1")
-        img_eng.save(qr_path_engrave)
-
-    return qr_path_display, qr_path_engrave
-
-def generate_vendor_qr_content(vendor_data):
-    """Generate QR content for vendor details"""
-    qr_payload = {
-        "vendor_id": vendor_data['id'],
-        "company_name": vendor_data['company_name'],
-        "contact_person": vendor_data['contact_person'],
-        "email": vendor_data['email'],
-        "phone": vendor_data.get('phone', ''),
-        "address": vendor_data.get('address', ''),
-        "railway_zone": vendor_data.get('railway_zone', 'South Eastern Railway'),
-        "railway_division": vendor_data.get('railway_division', 'HWH Division'),
-        "supply_region": vendor_data.get('supply_region', 'West Bengal, India'),
-        "registration_date": vendor_data.get('registration_date', ''),
-        "vendor_risk": vendor_data.get('vendor_risk', 'Low')
-    }
-    return json.dumps(qr_payload)
 
 def save_vendor_qr_image(vendor_id, qr_content):
     """Save vendor QR image for engraving"""
@@ -1438,7 +1332,11 @@ def vendor_dashboard():
 
 @app.route('/vendor/qr/<vendor_id>')
 def download_vendor_qr(vendor_id):
-    if 'vendor_id' not in session or session['vendor_id'] != int(vendor_id):
+    try:
+        vid = int(vendor_id)
+    except (ValueError, TypeError):
+        return redirect(url_for('vendor_login'))
+    if 'vendor_id' not in session or session['vendor_id'] != vid:
         return redirect(url_for('vendor_login'))
     
     conn = get_vendor_db_connection()
@@ -1529,20 +1427,13 @@ def download_vendor_gcode(vendor_id):
     vendor_dict = {col: vendor[idx] for idx, col in enumerate(columns)}
     conn.close()
 
-    print(f"[Vendor G-code] vendor type = {type(vendor)}")
-    print(f"[Vendor G-code] vendor raw = {vendor}")
-    print(f"[Vendor G-code] vendor_dict = {vendor_dict}")
-
     # Generate QR content + image
     try:
         vendor_qr_content = generate_vendor_qr_content(vendor_dict)
         qr_path = save_vendor_qr_image(vendor_id, vendor_qr_content)
-        print(f"[Vendor G-code] QR saved at {qr_path}")
     except Exception as e:
-        print(f"[Vendor G-code] QR generation failed: {e}")
         return f"QR generation failed: {e}", 500
 
-    # Generate G-code
     try:
         gcode_text = vendor_qr_to_gcode_raster(
             qr_path,
@@ -1551,9 +1442,7 @@ def download_vendor_gcode(vendor_id):
             engrave_speed=1500,
             target_size_mm=25.0
         )
-        print(f"[Vendor G-code] G-code length = {len(gcode_text)} chars")
     except Exception as e:
-        print(f"[Vendor G-code] Failed: {e}")
         return f"G-code generation failed: {e}", 500
 
     # Serve file
@@ -1655,10 +1544,7 @@ def index():
         qr_display_path, qr_engrave_path = save_qr_image(uid, qr_content)
 
         try:
-            # Convert empty vendor_id to None for database
             vendor_id_db = int(vendor_id) if vendor_id else None
-            
-            # FIXED INSERT STATEMENT - removed trailing comma and added vendor_email parameter
             c.execute("""INSERT INTO fittings 
                 (uid, item_type, vendor, vendor_id, lot, supply_date, warranty, warranty_end, 
                  manufactor_date, manufactor_number, notes, udm_synced, tms_synced, 
@@ -1769,6 +1655,8 @@ def view_all():
 
 @app.route('/products/<uid>/marketplace', methods=['POST'])
 def update_marketplace_settings(uid):
+    if 'vendor_id' not in session:
+        return redirect(url_for('vendor_login', next=request.path))
     category = request.form.get('category', 'Rail Components').strip() or 'Rail Components'
     price = parse_money(request.form.get('price'))
     discount = min(parse_money(request.form.get('discount')), 100.0)
@@ -1803,7 +1691,7 @@ def shop():
     category = request.args.get('category', '').strip()
     sort_by = request.args.get('sort', 'latest')
 
-    where = ["1=1"]
+    where = ["COALESCE(price, 0) > 0", "COALESCE(stock, 0) > 0"]
     params = []
     if query:
         where.append("(uid LIKE ? OR item_type LIKE ? OR vendor LIKE ? OR category LIKE ?)")
@@ -1999,6 +1887,7 @@ def order_success(order_no):
 def track_order():
     order = None
     items = []
+    shipment = None
     error = None
     if request.method == 'POST':
         order_no = request.form.get('order_no', '').strip()
@@ -2014,10 +1903,16 @@ def track_order():
             order = {key: row[key] for key in row.keys()}
             c.execute("SELECT * FROM marketplace_order_items WHERE order_id=?", (order['id'],))
             items = [{key: item[key] for key in item.keys()} for item in c.fetchall()]
+            ship_row = c.execute(
+                "SELECT * FROM shipments WHERE order_no=? ORDER BY created_at DESC LIMIT 1",
+                (order_no,)
+            ).fetchone()
+            if ship_row:
+                shipment = {key: ship_row[key] for key in ship_row.keys()}
         else:
             error = "No order found for that order number and email."
         conn.close()
-    return render_template('track.html', order=order, items=items, error=error)
+    return render_template('track.html', order=order, items=items, shipment=shipment, error=error)
 
 @app.route('/vendor/order/<order_no>/status', methods=['POST'])
 def update_order_status(order_no):
@@ -2068,6 +1963,34 @@ def admin_login():
 def admin_logout():
     session.pop('admin_logged_in', None)
     return redirect(url_for('admin_login'))
+@app.route('/admin/orders/list')
+@admin_required
+def admin_orders_list():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT o.order_no, o.customer_name, o.customer_email, o.status,
+               o.grand_total, o.created_at,
+               GROUP_CONCAT(i.product_name, ', ') AS products
+        FROM marketplace_orders o
+        LEFT JOIN marketplace_order_items i ON i.order_id = o.id
+        GROUP BY o.id ORDER BY o.created_at DESC LIMIT 100
+    """)
+    orders = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
+    conn.close()
+    return jsonify(orders)
+
+@app.route('/admin/vendors/list')
+@admin_required
+def admin_vendors_list():
+    conn = get_vendor_db_connection()
+    rows = conn.execute(
+        "SELECT id, company_name, contact_person, email, phone, railway_zone, "
+        "railway_division, registration_date, vendor_risk FROM vendors ORDER BY registration_date DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([{k: row[k] for k in row.keys()} for row in rows])
+
 
 @app.route('/admin')
 @admin_required
@@ -2328,7 +2251,11 @@ def send_vendor_gcode(vendor_id):
     """
     Send vendor QR G-code to ESP32
     """
-    if 'vendor_id' not in session or session['vendor_id'] != int(vendor_id):
+    try:
+        vid = int(vendor_id)
+    except (ValueError, TypeError):
+        return redirect(url_for('vendor_login'))
+    if 'vendor_id' not in session or session['vendor_id'] != vid:
         return redirect(url_for('vendor_login'))
     
     method = request.form.get('method', 'raster').lower()
@@ -2379,52 +2306,17 @@ def send_vendor_gcode(vendor_id):
 
 @app.route('/scan/<uid>', methods=['GET'])
 def scan(uid):
+    """QR scan redirect — sends to the full digital passport."""
     conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM fittings WHERE uid=?", (uid,))
-    row = c.fetchone()
+    row = conn.execute("SELECT uid FROM fittings WHERE uid=?", (uid,)).fetchone()
     conn.close()
-
     if not row:
-        return "UID not found", 404
+        return render_template('scan.html', uid=uid, risk='Unknown',
+                               vendor_risk='Unknown', inspection_date='N/A',
+                               qr_code='', error="Component not found"), 404
+    record_audit('QR_SCANNED', 'component', uid, 'public')
+    return redirect(url_for('component_passport', uid=uid))
 
-    # Convert to dictionary
-    row_dict = {key: row[key] for key in row.keys()}
-    
-    risk = row_dict.get('risk', 'Unknown')
-    vendor_risk = row_dict.get('vendor_risk', 'Unknown')
-    inspection_date = row_dict.get('inspection_date') or compute_next_inspection(
-        row_dict.get('inspection_date'), 
-        row_dict.get('repair_date'), 
-        row_dict.get('risk')
-    )
-
-    # Build QR content; embed minimal info for scanning template
-    qr_content = generate_qr_content(
-        row_dict.get('uid'),
-        row_dict.get('item_type', ''),
-        row_dict.get('vendor', ''),
-        row_dict.get('lot', ''),
-        row_dict.get('supply_date', ''),
-        row_dict.get('warranty_end', ''),
-        row_dict.get('manufactor_date', ''),
-        row_dict.get('manufactor_number', ''),
-        row_dict.get('notes', ''),
-        risk,
-        vendor_risk,
-        row_dict.get('vendor_email','')
-    )
-
-    qr_b64 = generate_qr_image_base64(qr_content)
-    
-    return render_template(
-        'scan.html',
-        uid=row_dict.get('uid'),
-        risk=risk,
-        vendor_risk=vendor_risk,
-        inspection_date=inspection_date,
-        qr_code=qr_b64
-    )
 
 @app.route('/test_qr/<uid>')
 def test_qr(uid):
@@ -2584,8 +2476,7 @@ def retry_pending_sync():
 
 
 # ============================================================
-# NEW ROUTES: Digital Passport, Traceability, Inspections,
-# Risk API, Divisions, Shipments, Inventory, Audit, Admin+
+# Digital Passport, Traceability, Inspections, Risk, Divisions
 # ============================================================
 
 @app.route('/component/<uid>')
@@ -2904,7 +2795,34 @@ def add_inspection(uid):
     return api_component_inspections(uid)
 
 
-# Override /scan/<uid> to redirect to the full digital passport
+
+# Wishlist (session-based, no login required)
+@app.route('/wishlist')
+def wishlist():
+    wishlist_uids = session.get('wishlist', [])
+    products = []
+    if wishlist_uids:
+        conn = get_db_connection()
+        placeholders = ','.join('?' for _ in wishlist_uids)
+        rows = conn.execute(f"SELECT * FROM fittings WHERE uid IN ({placeholders})", wishlist_uids).fetchall()
+        conn.close()
+        for row in rows:
+            p = {k: row[k] for k in row.keys()}
+            p['sale_price'] = selling_price(p)
+            products.append(p)
+    return render_template('wishlist.html', products=products)
+
+@app.route('/wishlist/toggle/<uid>', methods=['POST'])
+def wishlist_toggle(uid):
+    wl = session.get('wishlist', [])
+    if uid in wl:
+        wl.remove(uid)
+    else:
+        wl.append(uid)
+    session['wishlist'] = wl
+    session.modified = True
+    return redirect(request.referrer or url_for('shop'))
+
 @app.route('/passport/<uid>')
 def passport_redirect(uid):
     return redirect(url_for('component_passport', uid=uid))
@@ -2914,35 +2832,8 @@ def passport_redirect(uid):
 # ENHANCED: hook traceability into existing registration flow
 # ============================================================
 
-_original_index = index
-
-def _patched_index():
-    """Wrap index to record REGISTERED traceability event after insert."""
-    # We can't easily wrap the existing route, so traceability is recorded
-    # inside the checkout and registration routes directly.
-    return _original_index()
-
-
 # ============================================================
-# ENHANCED CHECKOUT: record traceability + inventory history
-# ============================================================
-
-# Monkey-patch checkout to add traceability after order placement
-_orig_checkout = checkout
-
-@app.route('/checkout_v2', methods=['GET', 'POST'])
-def checkout_v2():
-    """Not used - traceability is injected via post-order hook below."""
-    pass
-
-
-@app.after_request
-def after_request_hook(response):
-    return response
-
-
-# ============================================================
-# ENHANCED: /vendor/order/<order_no>/status with guards
+# Order status state machine
 # ============================================================
 
 ALLOWED_TRANSITIONS = {
@@ -3036,7 +2927,7 @@ def update_order_status_v2(order_no):
 
 
 # ============================================================
-# ENHANCED ADMIN: divisions page
+# Admin intelligence and division routes
 # ============================================================
 
 @app.route('/admin/divisions')
@@ -3120,8 +3011,7 @@ def admin_high_risk():
 
 
 # ============================================================
-# HOOK: record REGISTERED event when a new component is saved
-# This is called from the index route after successful insert
+# Post-action hooks
 # ============================================================
 
 def post_register_hooks(uid, item_type, vendor, risk_level, vendor_name=None):

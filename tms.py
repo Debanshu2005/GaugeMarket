@@ -1,6 +1,6 @@
 import requests
 
-COMPANION_URL = "http://127.0.0.1:5001/receive_data"  # Use same for demo
+COMPANION_URL = "http://127.0.0.1:5001/receive_data"
 
 def push_to_tms(data):
     try:

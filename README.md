@@ -212,11 +212,7 @@ GaugeMarket/
 │   └── vendor_gcode/          # Generated G-code files
 │
 ├── scripts/
-│   ├── create_demo_data.py    # Seed demo data
-│   └── fix.py                 # Database fix utility
-│
-└── __tests__/
-    └── ai_module.edge-cases.generated.test.py
+│   └── create_demo_data.py    # Seed demo data
 ```
 
 ---
