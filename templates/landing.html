@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GaugeMarket — Railway QR Vendor & Marketplace Portal</title>
+<title>GaugeMarket — Railway Fittings QR Portal</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='rail.css') }}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <style>
@@ -113,8 +113,8 @@
 <!-- ── Hero ── -->
 <section class="hero">
   <img src="{{ url_for('static', filename='image/rail.png') }}" class="hero-logo" alt="Indian Railways">
-  <h1>Railway QR <span>Vendor & Marketplace</span> Portal</h1>
-  <p>Register railway fittings, generate AI-styled QR codes for laser engraving, manage your vendor storefront, and let buyers track every component from manufacture to delivery.</p>
+  <h1>Railway Fittings — <span>QR Vendor Portal</span></h1>
+  <p>A portal for railway fitting vendors to register components, stamp QR codes via laser engraver, and sell through a shared marketplace. Buyers get full traceability from the factory floor to the depot.</p>
   <div class="hero-actions">
     <a href="{{ url_for('vendor_register') }}" class="btn btn-primary btn-lg"><i class="bi bi-person-plus-fill"></i> Register as Vendor</a>
     <a href="{{ url_for('shop') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-shop"></i> Browse Marketplace</a>
@@ -125,7 +125,7 @@
 <!-- ── Quick-links strip ── -->
 <div class="quicklinks">
   <a href="{{ url_for('vendor_login') }}"><i class="bi bi-speedometer2"></i> Vendor Dashboard</a>
-  <a href="{{ url_for('shop') }}"><i class="bi bi-grid"></i> Component Exchange</a>
+  <a href="{{ url_for('shop') }}"><i class="bi bi-grid"></i> Shop Fittings</a>
   <a href="{{ url_for('view_all') }}"><i class="bi bi-list-ul"></i> All Fittings</a>
   <a href="{{ url_for('track_order') }}"><i class="bi bi-truck"></i> Order Tracking</a>
   <a href="{{ url_for('admin_dashboard') }}"><i class="bi bi-bar-chart-line"></i> Admin Analytics</a>
@@ -134,49 +134,49 @@
 
 <!-- ── Features ── -->
 <div class="section">
-  <div class="section-title">Everything you need to manage railway components</div>
-  <div class="section-sub">From registration to delivery — one platform for vendors, buyers, and inspectors.</div>
+  <div class="section-title">Features</div>
+  <div class="section-sub">Covers the full lifecycle — registration, engraving, sale, and inspection.</div>
 
   <div class="feature-grid">
     <div class="feature-card">
       <div class="feature-icon"><i class="bi bi-qr-code"></i></div>
-      <h3>AI-Styled QR Codes</h3>
-      <p>Anime-themed QR codes with embedded railway logo. Two variants per fitting — display and laser-engrave ready.</p>
+      <h3>QR Code Generation</h3>
+      <p>Each fitting gets two QR codes — one colour version for the web UI with the railway logo embedded, and a black-and-white 1-bit copy for the laser engraver.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="bi bi-cpu"></i></div>
       <h3>ESP32 Laser Engraving</h3>
-      <p>G-code generation (raster, vector, fallback) streamed over WebSocket directly to your ESP32 engraver.</p>
+      <p>The 1-bit QR is converted to G-code and sent over WebSocket to the ESP32. Three conversion modes — raster zigzag, vector contour, and a simple fallback.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="bi bi-shield-check"></i></div>
-      <h3>AI Risk Assessment</h3>
-      <p>Keyword + ML-based risk scoring. Automatic inspection and repair date scheduling based on risk level.</p>
+      <h3>Risk Assessment</h3>
+      <p>Fitting notes are checked for words like "leak", "crack", and "corrosion". A trained model scores the result and schedules the next inspection at 30, 90, or 180 days.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="bi bi-passport"></i></div>
-      <h3>Digital Component Passport</h3>
-      <p>Full traceability timeline, warranty status, structured risk report, and inspection history per fitting.</p>
+      <h3>Component Passport</h3>
+      <p>Each fitting has a scan-by-scan event log — registration, inspections, shipments, QR scans. Warranty expiry and current risk level shown inline.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="bi bi-shop"></i></div>
-      <h3>Component Marketplace</h3>
-      <p>Browse, filter, and purchase railway fittings. Cart, checkout, discount badges, and stock validation built in.</p>
+      <h3>Marketplace</h3>
+      <p>Vendors set a price, stock count, and category per fitting. Buyers filter by category or vendor, add to cart, and check out. Stock updates at the moment of order.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="bi bi-truck"></i></div>
       <h3>Order & Shipment Tracking</h3>
-      <p>Full order lifecycle with guarded status transitions. Shipment records with courier and tracking numbers.</p>
+      <p>Order status follows a fixed chain: Pending → Confirmed → Shipped → Delivered. Vendors enter the courier name and tracking number when marking an order shipped.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="bi bi-star-half"></i></div>
-      <h3>Reviews & Ratings</h3>
-      <p>Product and vendor reviews with star ratings. Buyers can leave feedback after delivery.</p>
+      <h3>Reviews</h3>
+      <p>Buyers leave a star rating and comment on the product and the vendor separately. Both show up on the respective listing and profile pages.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon"><i class="bi bi-bar-chart-line"></i></div>
-      <h3>Admin Intelligence</h3>
-      <p>High-risk alerts, upcoming inspections, expiring warranties, revenue analytics, and railway division stats.</p>
+      <h3>Admin Dashboard</h3>
+      <p>Order totals, revenue, low-stock warnings, high-risk component count, upcoming inspections, expiring warranties, and a per-vendor revenue table.</p>
     </div>
   </div>
 </div>
@@ -184,35 +184,35 @@
 <!-- ── How it works ── -->
 <div style="background:var(--surface-2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
   <div class="section">
-    <div class="section-title">How it works</div>
-    <div class="section-sub">Get up and running in four steps.</div>
+    <div class="section-title">Getting started</div>
+    <div class="section-sub">From account creation to a physical engraved fitting in four steps.</div>
     <div class="steps">
       <div class="step">
         <div class="step-num">1</div>
         <div class="step-body">
           <h4>Register as a Vendor</h4>
-          <p>Create your account with company details, railway zone, and division.</p>
+          <p>Sign up with your company name, contact, railway zone, and division. Takes about a minute.</p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
         <div class="step-body">
-          <h4>Add Fittings</h4>
-          <p>Enter UID, type, lot, warranty, and marketplace settings. AI calculates risk and inspection dates.</p>
+          <h4>Register a Fitting</h4>
+          <p>Fill in the UID, item type, lot number, warranty, and supply date. Risk level and inspection schedule are set automatically.</p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-body">
-          <h4>Generate & Engrave QR</h4>
-          <p>Download the AI-styled QR or stream G-code to your ESP32 laser engraver in one click.</p>
+          <h4>Engrave the QR</h4>
+          <p>Hit the engrave button — G-code is generated and streamed to the ESP32 over WebSocket. The engraver runs immediately.</p>
         </div>
       </div>
       <div class="step">
         <div class="step-num">4</div>
         <div class="step-body">
-          <h4>Sell & Track</h4>
-          <p>Buyers browse the marketplace, place orders, and track shipments. Every scan updates the digital passport.</p>
+          <h4>List & Fulfil Orders</h4>
+          <p>Set a price and list the fitting. When a buyer orders, update the shipment status from your dashboard. Every QR scan logs to the passport.</p>
         </div>
       </div>
     </div>
@@ -222,18 +222,18 @@
 <!-- ── Stats ── -->
 <div class="section">
   <div class="stats">
-    <div class="stat"><div class="stat-val">10+</div><div class="stat-label">Railway Divisions</div></div>
-    <div class="stat"><div class="stat-val">3</div><div class="stat-label">G-code Methods</div></div>
-    <div class="stat"><div class="stat-val">AI</div><div class="stat-label">Risk Scoring</div></div>
-    <div class="stat"><div class="stat-val">ESP32</div><div class="stat-label">Hardware Integration</div></div>
-    <div class="stat"><div class="stat-val">100%</div><div class="stat-label">Traceability</div></div>
+    <div class="stat"><div class="stat-val">SQLite</div><div class="stat-label">fittings.db + vendors.db</div></div>
+    <div class="stat"><div class="stat-val">3</div><div class="stat-label">G-code modes: raster, vector, fallback</div></div>
+    <div class="stat"><div class="stat-val">scikit-learn</div><div class="stat-label">Risk model</div></div>
+    <div class="stat"><div class="stat-val">ESP32</div><div class="stat-label">WebSocket G-code push</div></div>
+    <div class="stat"><div class="stat-val">per-scan</div><div class="stat-label">Passport event logging</div></div>
   </div>
 </div>
 
 <!-- ── CTA ── -->
 <div class="cta-banner">
-  <h2>Ready to get started?</h2>
-  <p>Register your vendor account and list your first fitting in under 5 minutes.</p>
+  <h2>Vendor or buyer?</h2>
+  <p>Vendors register and manage fittings. Buyers browse the shop and track orders by order number.</p>
   <div class="cta-btns">
     <a href="{{ url_for('vendor_register') }}" class="btn btn-primary btn-lg"><i class="bi bi-person-plus-fill"></i> Create Vendor Account</a>
     <a href="{{ url_for('vendor_login') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-box-arrow-in-right"></i> Sign In</a>

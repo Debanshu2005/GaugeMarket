@@ -31,7 +31,13 @@ static/vendor_gcode/
 .vercel/
 _archive/
 archive/
+graphify-out/
+__tests__/
 incremental_push.py
+workspace.json
+workspacememory.md
+WORKSPACE_MEMORY.md
+.janitor-audit-log
 
 # OS/editor
 .DS_Store

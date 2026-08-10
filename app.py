@@ -1321,8 +1321,11 @@ def vendor_login():
                 # Set session variables
                 session['vendor_id'] = vendor_dict['id']
                 session['vendor_name'] = vendor_dict['company_name']
+                from urllib.parse import urlparse
                 next_url = request.args.get('next') or request.form.get('next')
-                return redirect(next_url if next_url else url_for('vendor_dashboard'))
+                if next_url and urlparse(next_url).netloc:
+                    next_url = None
+                return redirect(next_url or url_for('vendor_dashboard'))
         
         return render_template('vendor_login.html', error="Invalid credentials")
     
@@ -2053,8 +2056,11 @@ def admin_login():
     if request.method == 'POST':
         if request.form.get('password') == ADMIN_PASSWORD:
             session['admin_logged_in'] = True
+            from urllib.parse import urlparse
             next_url = request.args.get('next') or request.form.get('next')
-            return redirect(next_url if next_url else url_for('admin_dashboard'))
+            if next_url and urlparse(next_url).netloc:
+                next_url = None
+            return redirect(next_url or url_for('admin_dashboard'))
         error = 'Invalid password'
     return render_template('admin_login.html', error=error)
 

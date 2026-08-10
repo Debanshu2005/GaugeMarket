@@ -18,6 +18,7 @@ Set these in Vercel Project Settings:
 
 ```text
 SECRET_KEY=replace-with-a-long-random-secret
+ADMIN_PASSWORD=replace-with-a-strong-admin-password
 ```
 
 Optional local/runtime overrides:
