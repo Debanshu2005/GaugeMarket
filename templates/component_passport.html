@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital Passport — {{ component.uid }} | RailQR</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='rail.css') }}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<style>
+  .passport-wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+  .passport-header {
+    background: var(--navy);
+    border-radius: var(--radius-xl);
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 24px;
+    border-bottom: 4px solid var(--saffron);
+  }
+  .passport-qr-wrap {
+    background: #fff;
+    border-radius: 12px;
+    padding: 10px;
+    flex-shrink: 0;
+  }
+  .passport-qr-wrap img { width: 120px; height: 120px; object-fit: contain; display: block; }
+  .passport-identity { flex: 1; }
+  .passport-identity h1 { font-size: 1.5rem; color: #fff; margin: 0 0 4px; }
+  .passport-identity .uid-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.5); margin-bottom: 8px; }
+  .passport-identity .uid-value { font-size: 1.1rem; font-weight: 800; color: var(--saffron); font-family: monospace; }
+  .passport-verified { display: flex; align-items: center; gap: 6px; color: #4ade80; font-size: .8125rem; font-weight: 700; margin-top: 10px; }
+  .passport-verified.invalid { color: #f87171; }
+  .section-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 640px) { .section-grid { grid-template-columns: 1fr; } .passport-header { flex-direction: column; } }
+  .info-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .875rem; }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { color: var(--ink-3); font-weight: 600; font-size: .8125rem; }
+  .info-value { font-weight: 700; text-align: right; }
+  .timeline-event { display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .timeline-event:last-child { border-bottom: none; }
+  .timeline-dot-wrap { display: flex; flex-direction: column; align-items: center; }
+  .timeline-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--blue); flex-shrink: 0; margin-top: 4px; }
+  .timeline-line { width: 2px; flex: 1; background: var(--border); margin-top: 4px; }
+  .event-type { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--blue); }
+  .event-desc { font-size: .875rem; color: var(--ink-2); margin: 2px 0; }
+  .event-meta { font-size: .75rem; color: var(--ink-3); }
+  .risk-score-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; margin-top: 6px; }
+  .risk-score-fill { height: 100%; border-radius: 4px; transition: width .6s ease; }
+  .warranty-active { color: #4ade80; }
+  .warranty-expiring { color: #fbbf24; }
+  .warranty-expired { color: #f87171; }
+</style>
+</head>
+<body>
+
+<nav class="rq-topbar">
+  <div class="rq-topbar-inner">
+    <a href="{{ url_for('index') }}" class="rq-brand">
+      <img src="{{ url_for('static', filename='image/rail.png') }}" class="rq-brand-logo" alt="RailQR">
+      <span class="rq-brand-name">Rail<span>QR</span></span>
+    </a>
+    <div class="rq-nav">
+      <a href="{{ url_for('shop') }}">Marketplace</a>
+      <a href="{{ url_for('view_all') }}">Inventory</a>
+      <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+    </div>
+    <div class="rq-topbar-actions">
+      <a href="{{ url_for('cart') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-cart3"></i> Cart</a>
+    </div>
+  </div>
+</nav>
+
+<div class="passport-wrap">
+
+  <!-- PASSPORT HEADER -->
+  <div class="passport-header">
+    <div class="passport-qr-wrap">
+      <img src="{{ url_for('generated_qrcode', filename=component.uid ~ '_display.png') }}" alt="QR {{ component.uid }}">
+    </div>
+    <div class="passport-identity">
+      <div class="uid-label">Railway Component Digital Passport</div>
+      <h1>{{ component.item_type }}</h1>
+      <div class="uid-value">{{ component.uid }}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        {% if component.risk == 'High' %}
+        <span class="rq-badge rq-badge-red"><i class="bi bi-exclamation-triangle-fill"></i> High Risk</span>
+        {% elif component.risk == 'Medium' %}
+        <span class="rq-badge rq-badge-amber"><i class="bi bi-dash-circle-fill"></i> Medium Risk</span>
+        {% else %}
+        <span class="rq-badge rq-badge-green"><i class="bi bi-check-circle-fill"></i> Low Risk</span>
+        {% endif %}
+        <span class="rq-badge rq-badge-navy">{{ component.category or 'Rail Components' }}</span>
+        {% if lifecycle_status %}
+        <span class="rq-badge rq-badge-blue">{{ lifecycle_status }}</span>
+        {% endif %}
+      </div>
+      <div class="passport-verified {% if not component.uid %}invalid{% endif %}">
+        <i class="bi bi-patch-check-fill"></i> Verified by Indian Railways QR System
+        <span style="font-weight:400;color:rgba(255,255,255,.4);margin-left:8px;">{{ verified_at }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-grid">
+
+    <!-- IDENTITY -->
+    <div class="rq-card">
+      <div class="rq-card-header"><h2><i class="bi bi-fingerprint me-2 text-primary"></i>Component Identity</h2></div>
+      <div class="rq-card-body">
+        <div class="info-row"><span class="info-label">UID</span><span class="info-value rq-mono">{{ component.uid }}</span></div>
+        <div class="info-row"><span class="info-label">Type</span><span class="info-value">{{ component.item_type }}</span></div>
+        <div class="info-row"><span class="info-label">Lot / Batch</span><span class="info-value rq-mono">{{ component.lot }}</span></div>
+        <div class="info-row"><span class="info-label">Manufacturer No.</span><span class="info-value rq-mono">{{ component.manufactor_number or '—' }}</span></div>
+        <div class="info-row"><span class="info-label">Category</span><span class="info-value">{{ component.category or 'Rail Components' }}</span></div>
+      </div>
+    </div>
+
+    <!-- VENDOR -->
+    <div class="rq-card">
+      <div class="rq-card-header"><h2><i class="bi bi-building me-2 text-primary"></i>Vendor</h2></div>
+      <div class="rq-card-body">
+        <div class="info-row">
+          <span class="info-label">Company</span>
+          <span class="info-value">
+            {% if component.vendor_id %}
+            <a href="{{ url_for('vendor_details', vendor_id=component.vendor_id) }}">{{ component.vendor }}</a>
+            {% else %}{{ component.vendor }}{% endif %}
+          </span>
+        </div>
+        <div class="info-row"><span class="info-label">Vendor Risk</span>
+          <span class="info-value">
+            {% if component.vendor_risk == 'High' %}<span class="rq-badge rq-badge-red">High</span>
+            {% elif component.vendor_risk == 'Medium' %}<span class="rq-badge rq-badge-amber">Medium</span>
+            {% else %}<span class="rq-badge rq-badge-green">Low</span>{% endif %}
+          </span>
+        </div>
+        <div class="info-row"><span class="info-label">Railway Zone</span><span class="info-value">{{ vendor_meta.railway_zone or '—' }}</span></div>
+        <div class="info-row"><span class="info-label">Division</span><span class="info-value">{{ vendor_meta.railway_division or '—' }}</span></div>
+        <div class="info-row"><span class="info-label">Supply Region</span><span class="info-value">{{ vendor_meta.supply_region or '—' }}</span></div>
+      </div>
+    </div>
+
+    <!-- DATES & WARRANTY -->
+    <div class="rq-card">
+      <div class="rq-card-header"><h2><i class="bi bi-calendar3 me-2 text-primary"></i>Dates & Warranty</h2></div>
+      <div class="rq-card-body">
+        <div class="info-row"><span class="info-label">Manufacture Date</span><span class="info-value">{{ component.manufactor_date or '—' }}</span></div>
+        <div class="info-row"><span class="info-label">Supply Date</span><span class="info-value">{{ component.supply_date or '—' }}</span></div>
+        <div class="info-row"><span class="info-label">Warranty End</span><span class="info-value">{{ component.warranty_end or '—' }}</span></div>
+        <div class="info-row">
+          <span class="info-label">Warranty Status</span>
+          <span class="info-value">
+            {% if warranty_status == 'ACTIVE' %}<span class="warranty-active"><i class="bi bi-shield-check-fill"></i> Active</span>
+            {% elif warranty_status == 'EXPIRING_SOON' %}<span class="warranty-expiring"><i class="bi bi-shield-exclamation"></i> Expiring Soon</span>
+            {% elif warranty_status == 'EXPIRED' %}<span class="warranty-expired"><i class="bi bi-shield-x-fill"></i> Expired</span>
+            {% else %}<span style="color:var(--ink-3);">Unknown</span>{% endif %}
+          </span>
+        </div>
+        <div class="info-row"><span class="info-label">Next Inspection</span><span class="info-value">{{ component.inspection_date or '—' }}</span></div>
+      </div>
+    </div>
+
+    <!-- AI RISK ASSESSMENT -->
+    <div class="rq-card">
+      <div class="rq-card-header"><h2><i class="bi bi-cpu me-2 text-primary"></i>AI Risk Assessment</h2></div>
+      <div class="rq-card-body">
+        {% if risk_assessment %}
+        <div class="info-row">
+          <span class="info-label">Risk Level</span>
+          <span class="info-value">
+            {% if risk_assessment.risk_level == 'CRITICAL' or risk_assessment.risk_level == 'High' %}<span class="rq-badge rq-badge-red">{{ risk_assessment.risk_level }}</span>
+            {% elif risk_assessment.risk_level == 'Medium' %}<span class="rq-badge rq-badge-amber">{{ risk_assessment.risk_level }}</span>
+            {% else %}<span class="rq-badge rq-badge-green">{{ risk_assessment.risk_level }}</span>{% endif %}
+          </span>
+        </div>
+        <div class="info-row"><span class="info-label">Risk Score</span>
+          <span class="info-value rq-mono">{{ risk_assessment.risk_score }}/100</span>
+        </div>
+        <div class="risk-score-bar">
+          <div class="risk-score-fill" style="width:{{ risk_assessment.risk_score }}%;background:{% if risk_assessment.risk_score >= 70 %}#f87171{% elif risk_assessment.risk_score >= 40 %}#fbbf24{% else %}#4ade80{% endif %};"></div>
+        </div>
+        {% if risk_assessment.factors %}
+        <div style="margin-top:10px;">
+          <div class="info-label" style="margin-bottom:5px;">Risk Factors</div>
+          {% for factor in risk_assessment.factors %}
+          <div style="font-size:.8125rem;color:var(--ink-2);padding:3px 0;"><i class="bi bi-dot"></i>{{ factor }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if risk_assessment.recommendation %}
+        <div style="margin-top:10px;padding:8px 12px;background:var(--surface);border-radius:8px;font-size:.8125rem;color:var(--ink-2);">
+          <i class="bi bi-lightbulb-fill" style="color:var(--saffron);margin-right:6px;"></i>{{ risk_assessment.recommendation }}
+        </div>
+        {% endif %}
+        <div style="margin-top:8px;font-size:.75rem;color:var(--ink-3);">Assessed: {{ risk_assessment.assessed_at[:10] if risk_assessment.assessed_at else '—' }}</div>
+        {% else %}
+        <div class="rq-empty" style="padding:16px;"><p style="margin:0;font-size:.875rem;">No risk assessment available.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- TRACEABILITY TIMELINE -->
+  <div class="rq-card mb-4">
+    <div class="rq-card-header">
+      <h2><i class="bi bi-diagram-3 me-2 text-primary"></i>Component Traceability</h2>
+      <span style="font-size:.8125rem;color:var(--ink-3);">{{ events|length }} lifecycle events</span>
+    </div>
+    <div class="rq-card-body">
+      {% if events %}
+      <div>
+        {% for event in events %}
+        <div class="timeline-event">
+          <div class="timeline-dot-wrap">
+            <div class="timeline-dot" style="background:
+              {% if event.event_type in ['REGISTERED','MANUFACTURED'] %}#4ade80
+              {% elif event.event_type in ['HIGH_RISK','INSPECTION_FAILED'] %}#f87171
+              {% elif event.event_type in ['PURCHASED','SHIPPED','DELIVERED'] %}#60a5fa
+              {% else %}var(--blue){% endif %};"></div>
+            {% if not loop.last %}<div class="timeline-line"></div>{% endif %}
+          </div>
+          <div style="flex:1;padding-bottom:10px;">
+            <div class="event-type">{{ event.event_type.replace('_',' ') }}</div>
+            <div class="event-desc">{{ event.description }}</div>
+            <div class="event-meta">
+              {{ event.event_time[:16].replace('T',' ') if event.event_time else '' }}
+              {% if event.actor %} · {{ event.actor }}{% endif %}
+              {% if event.location %} · {{ event.location }}{% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="rq-empty" style="padding:20px;"><p style="margin:0;">No traceability events recorded yet.</p></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- INSPECTIONS -->
+  {% if inspections %}
+  <div class="rq-card mb-4">
+    <div class="rq-card-header"><h2><i class="bi bi-clipboard-check me-2 text-primary"></i>Inspection History</h2></div>
+    <div class="table-wrap">
+      <table class="rq-table">
+        <thead><tr><th>Date</th><th>Inspector</th><th>Status</th><th>Risk</th><th>Findings</th><th>Next</th></tr></thead>
+        <tbody>
+          {% for insp in inspections %}
+          <tr>
+            <td class="rq-mono">{{ insp.inspection_date }}</td>
+            <td>{{ insp.inspector_name or '—' }}</td>
+            <td>
+              {% if insp.status == 'PASSED' %}<span class="rq-badge rq-badge-green">Passed</span>
+              {% elif insp.status == 'FAILED' %}<span class="rq-badge rq-badge-red">Failed</span>
+              {% else %}<span class="rq-badge rq-badge-amber">{{ insp.status }}</span>{% endif %}
+            </td>
+            <td>
+              {% if insp.risk_level == 'High' %}<span class="rq-badge rq-badge-red">High</span>
+              {% elif insp.risk_level == 'Medium' %}<span class="rq-badge rq-badge-amber">Medium</span>
+              {% else %}<span class="rq-badge rq-badge-green">Low</span>{% endif %}
+            </td>
+            <td style="font-size:.8125rem;">{{ insp.findings or '—' }}</td>
+            <td class="rq-mono" style="font-size:.8125rem;">{{ insp.next_inspection_date or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ACTIONS -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
+    <a href="{{ url_for('view_record', uid=component.uid) }}" class="btn btn-primary"><i class="bi bi-file-text"></i> Full Details</a>
+    <a href="{{ url_for('shop') }}" class="btn btn-outline-secondary"><i class="bi bi-shop"></i> Marketplace</a>
+    {% if component.vendor_id %}
+    <a href="{{ url_for('vendor_details', vendor_id=component.vendor_id) }}" class="btn btn-outline-secondary"><i class="bi bi-building"></i> Vendor Profile</a>
+    {% endif %}
+    <a href="{{ url_for('api_component_traceability', uid=component.uid) }}" class="btn btn-outline-secondary" target="_blank"><i class="bi bi-code-slash"></i> API</a>
+  </div>
+
+</div>
+
+<footer class="rq-footer">
+  <img src="{{ url_for('static', filename='image/rail.png') }}" alt="Indian Railways" style="height:22px;opacity:.5;vertical-align:middle;margin-right:8px;">
+  © Indian Railways Fittings Department
+</footer>
+</body>
+</html>

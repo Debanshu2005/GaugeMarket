@@ -127,9 +127,9 @@
 
     <!-- Footer -->
     <div class="scan-footer">
-      <a href="{{ url_for('view_record', uid=uid) }}" class="btn btn-primary btn-sm"><i class="bi bi-file-text"></i> Full Details</a>
+      <a href="{{ url_for('component_passport', uid=uid) }}" class="btn btn-primary btn-sm"><i class="bi bi-passport"></i> Digital Passport</a>
+      <a href="{{ url_for('view_record', uid=uid) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-text"></i> Full Details</a>
       <a href="{{ url_for('shop') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-shop"></i> Marketplace</a>
-      <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-house"></i> Home</a>
     </div>
   </div>
 </div>

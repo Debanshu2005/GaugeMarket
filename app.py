@@ -253,6 +253,343 @@ def ensure_table_columns():
 # Run schema check at startup
 ensure_table_columns()
 
+
+def init_extended_tables():
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS traceability_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            description TEXT,
+            actor TEXT,
+            location TEXT,
+            order_no TEXT,
+            event_time TEXT NOT NULL
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS component_inspections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT NOT NULL,
+            inspector_name TEXT,
+            inspection_date TEXT NOT NULL,
+            status TEXT DEFAULT 'PENDING',
+            findings TEXT,
+            notes TEXT,
+            risk_level TEXT DEFAULT 'Low',
+            next_inspection_date TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS risk_assessments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT NOT NULL,
+            risk_level TEXT NOT NULL,
+            risk_score INTEGER DEFAULT 0,
+            factors TEXT,
+            recommendation TEXT,
+            assessed_at TEXT NOT NULL
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS shipments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            order_no TEXT NOT NULL,
+            vendor_id TEXT,
+            courier TEXT DEFAULT 'Indian Railways Logistics',
+            tracking_number TEXT,
+            status TEXT DEFAULT 'PENDING',
+            estimated_delivery TEXT,
+            shipped_at TEXT,
+            delivered_at TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL,
+            entity_type TEXT,
+            entity_id TEXT,
+            actor TEXT,
+            details TEXT,
+            ip_address TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS inventory_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uid TEXT NOT NULL,
+            change_type TEXT NOT NULL,
+            quantity_before INTEGER DEFAULT 0,
+            quantity_change INTEGER DEFAULT 0,
+            quantity_after INTEGER DEFAULT 0,
+            reason TEXT,
+            order_no TEXT,
+            actor TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    c.execute("PRAGMA table_info(fittings)")
+    existing = {row[1] for row in c.fetchall()}
+    for col, coltype in [
+        ("reserved_stock", "INTEGER DEFAULT 0"),
+        ("lifecycle_status", "TEXT DEFAULT 'REGISTERED'"),
+        ("qr_active", "INTEGER DEFAULT 1"),
+    ]:
+        if col not in existing:
+            c.execute(f"ALTER TABLE fittings ADD COLUMN {col} {coltype}")
+    conn.commit()
+    conn.close()
+    vconn = get_vendor_db_connection()
+    vc = vconn.cursor()
+    vc.execute("""
+        CREATE TABLE IF NOT EXISTS railway_divisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            code TEXT UNIQUE NOT NULL,
+            zone TEXT NOT NULL,
+            region TEXT,
+            hq_location TEXT,
+            status TEXT DEFAULT 'ACTIVE',
+            contact_email TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+    vc.execute("SELECT COUNT(*) FROM railway_divisions")
+    if vc.fetchone()[0] == 0:
+        from datetime import datetime as _dt
+        now = _dt.now().isoformat(timespec='seconds')
+        default_divisions = [
+            ('Howrah Division','HWH','South Eastern Railway','West Bengal','Howrah','ACTIVE','hwh@ser.railnet.gov.in'),
+            ('Kharagpur Division','KGP','South Eastern Railway','West Bengal','Kharagpur','ACTIVE','kgp@ser.railnet.gov.in'),
+            ('Adra Division','ADRA','South Eastern Railway','West Bengal','Adra','ACTIVE','adra@ser.railnet.gov.in'),
+            ('Chakradharpur Division','CKP','South Eastern Railway','Jharkhand','Chakradharpur','ACTIVE','ckp@ser.railnet.gov.in'),
+            ('Mumbai Division','CSTM','Central Railway','Maharashtra','Mumbai','ACTIVE','cstm@cr.railnet.gov.in'),
+            ('Pune Division','PUNE','Central Railway','Maharashtra','Pune','ACTIVE','pune@cr.railnet.gov.in'),
+            ('Delhi Division','DLI','Northern Railway','Delhi','New Delhi','ACTIVE','dli@nr.railnet.gov.in'),
+            ('Ambala Division','UMB','Northern Railway','Haryana','Ambala','ACTIVE','umb@nr.railnet.gov.in'),
+            ('Chennai Division','MAS','Southern Railway','Tamil Nadu','Chennai','ACTIVE','mas@sr.railnet.gov.in'),
+            ('Vijayawada Division','BZA','South Central Railway','Andhra Pradesh','Vijayawada','ACTIVE','bza@scr.railnet.gov.in'),
+        ]
+        vc.executemany(
+            "INSERT INTO railway_divisions (name,code,zone,region,hq_location,status,contact_email,created_at) VALUES (?,?,?,?,?,?,?,?)",
+            [(d[0],d[1],d[2],d[3],d[4],d[5],d[6],now) for d in default_divisions]
+        )
+    vconn.commit()
+    vconn.close()
+
+init_extended_tables()
+
+
+def record_traceability_event(uid, event_type, description, actor=None, location=None, order_no=None):
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT INTO traceability_events (uid,event_type,description,actor,location,order_no,event_time) VALUES (?,?,?,?,?,?,?)",
+            (uid, event_type, description, actor, location, order_no, datetime.now().isoformat(timespec='seconds'))
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Traceability] {e}")
+
+
+def record_audit(action, entity_type=None, entity_id=None, actor=None, details=None):
+    try:
+        ip = request.remote_addr
+    except Exception:
+        ip = None
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT INTO audit_log (action,entity_type,entity_id,actor,details,ip_address,created_at) VALUES (?,?,?,?,?,?,?)",
+            (action, entity_type, str(entity_id) if entity_id else None, actor, details, ip,
+             datetime.now().isoformat(timespec='seconds'))
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Audit] {e}")
+
+
+def record_inventory_change(uid, change_type, qty_before, qty_change, reason=None, order_no=None, actor=None):
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT INTO inventory_history (uid,change_type,quantity_before,quantity_change,quantity_after,reason,order_no,actor,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (uid, change_type, qty_before, qty_change, qty_before + qty_change,
+             reason, order_no, actor, datetime.now().isoformat(timespec='seconds'))
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Inventory] {e}")
+
+
+def compute_warranty_status(warranty_end_str):
+    if not warranty_end_str:
+        return 'UNKNOWN'
+    try:
+        end = datetime.strptime(warranty_end_str, "%Y-%m-%d").date()
+        today = datetime.today().date()
+        if end < today:
+            return 'EXPIRED'
+        if (end - today).days <= 90:
+            return 'EXPIRING_SOON'
+        return 'ACTIVE'
+    except Exception:
+        return 'UNKNOWN'
+
+
+def build_structured_risk(component):
+    uid = component.get('uid')
+    risk_level = component.get('risk', 'Low')
+    warranty_status = compute_warranty_status(component.get('warranty_end'))
+    score = 0
+    factors = []
+    if risk_level == 'High':
+        score += 50
+        factors.append('High-risk keywords detected in inspection notes')
+    elif risk_level == 'Medium':
+        score += 25
+        factors.append('Medium-risk indicators in notes')
+    if warranty_status == 'EXPIRED':
+        score += 25
+        factors.append('Warranty has expired')
+    elif warranty_status == 'EXPIRING_SOON':
+        score += 10
+        factors.append('Warranty expiring within 90 days')
+    inspection_date_str = component.get('inspection_date')
+    if inspection_date_str:
+        try:
+            if datetime.strptime(inspection_date_str, "%Y-%m-%d").date() < datetime.today().date():
+                score += 15
+                factors.append('Scheduled inspection date has passed')
+        except Exception:
+            pass
+    vendor_risk = component.get('vendor_risk', 'Low')
+    if vendor_risk == 'High':
+        score += 10
+        factors.append('Vendor has high aggregate risk rating')
+    elif vendor_risk == 'Medium':
+        score += 5
+        factors.append('Vendor has medium aggregate risk rating')
+    score = min(score, 100)
+    if score >= 70:
+        final_level = 'CRITICAL'
+        recommendation = 'Immediate inspection and removal from service recommended.'
+    elif score >= 40:
+        final_level = 'High'
+        recommendation = 'Schedule inspection within 30 days. Monitor closely.'
+    elif score >= 20:
+        final_level = 'Medium'
+        recommendation = 'Routine inspection recommended within 90 days.'
+    else:
+        final_level = 'Low'
+        recommendation = 'Component is within normal operating parameters.'
+    if not factors:
+        factors.append('No significant risk indicators detected')
+    assessed_at = datetime.now().isoformat(timespec='seconds')
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM risk_assessments WHERE uid=?", (uid,))
+        conn.execute(
+            "INSERT INTO risk_assessments (uid,risk_level,risk_score,factors,recommendation,assessed_at) VALUES (?,?,?,?,?,?)",
+            (uid, final_level, score, json.dumps(factors), recommendation, assessed_at)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[RiskAssessment] {e}")
+    return {'risk_level': final_level, 'risk_score': score, 'factors': factors,
+            'recommendation': recommendation, 'assessed_at': assessed_at}
+
+
+def get_latest_risk_assessment(uid):
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT * FROM risk_assessments WHERE uid=? ORDER BY assessed_at DESC LIMIT 1", (uid,)
+        ).fetchone()
+        conn.close()
+        if row:
+            d = {k: row[k] for k in row.keys()}
+            try:
+                d['factors'] = json.loads(d.get('factors') or '[]')
+            except Exception:
+                d['factors'] = []
+            return d
+    except Exception:
+        pass
+    return None
+
+
+def get_component_traceability(uid):
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            "SELECT * FROM traceability_events WHERE uid=? ORDER BY event_time ASC", (uid,)
+        ).fetchall()
+        conn.close()
+        return [{k: row[k] for k in row.keys()} for row in rows]
+    except Exception:
+        return []
+
+
+def get_component_inspections(uid):
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            "SELECT * FROM component_inspections WHERE uid=? ORDER BY inspection_date DESC", (uid,)
+        ).fetchall()
+        conn.close()
+        return [{k: row[k] for k in row.keys()} for row in rows]
+    except Exception:
+        return []
+
+
+def get_vendor_meta(vendor_id):
+    if not vendor_id:
+        return {}
+    try:
+        conn = get_vendor_db_connection()
+        row = conn.execute("SELECT * FROM vendors WHERE id=?", (vendor_id,)).fetchone()
+        conn.close()
+        return {k: row[k] for k in row.keys()} if row else {}
+    except Exception:
+        return {}
+
+
+def determine_lifecycle_status(component):
+    explicit = component.get('lifecycle_status')
+    if explicit and explicit not in ('REGISTERED', None, ''):
+        return explicit
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            """SELECT o.status FROM marketplace_order_items i
+               JOIN marketplace_orders o ON o.id=i.order_id
+               WHERE i.uid=? ORDER BY o.created_at DESC LIMIT 1""",
+            (component.get('uid'),)
+        ).fetchone()
+        conn.close()
+        if row:
+            return {'Placed':'PURCHASED','Accepted':'PURCHASED','Packed':'PACKED',
+                    'Shipped':'SHIPPED','Out for Delivery':'IN_TRANSIT',
+                    'Delivered':'DELIVERED','Completed':'DELIVERED'}.get(row[0], 'LISTED')
+    except Exception:
+        pass
+    if parse_money(component.get('price')) > 0 and parse_int(component.get('stock')) > 0:
+        return 'LISTED'
+    return 'REGISTERED'
+
+
 def get_vendor_db_connection():
     conn = sqlite3.connect(VENDOR_DB)
     conn.row_factory = sqlite3.Row   # 🔑 this is the fix
@@ -398,13 +735,7 @@ def vendor_revenue_series(vendor_id, vendor_name):
     conn.close()
 
     if not rows:
-        rows = [
-            {"month": "Apr", "revenue": 185000, "units": 42},
-            {"month": "May", "revenue": 242000, "units": 58},
-            {"month": "Jun", "revenue": 218000, "units": 51},
-            {"month": "Jul", "revenue": 296000, "units": 64},
-            {"month": "Aug", "revenue": 334000, "units": 73},
-        ]
+        return []
 
     max_revenue = max(parse_money(row.get("revenue")) for row in rows) or 1
     for row in rows:
@@ -979,7 +1310,8 @@ def vendor_login():
                 # Set session variables
                 session['vendor_id'] = vendor_dict['id']
                 session['vendor_name'] = vendor_dict['company_name']
-                return redirect(url_for('vendor_dashboard'))
+                next_url = request.args.get('next') or request.form.get('next')
+                return redirect(next_url if next_url else url_for('vendor_dashboard'))
         
         return render_template('vendor_login.html', error="Invalid credentials")
     
@@ -1221,6 +1553,14 @@ def index():
     vendors = [{key: row[key] for key in row.keys()} for row in vendor_rows] if vendor_rows else []
     
     if request.method == 'POST':
+        # Require vendor login before registering a part
+        if 'vendor_id' not in session:
+            return redirect(url_for('vendor_login', next=url_for('index')))
+        # Ensure submitted vendor_id matches the logged-in vendor
+        submitted_vid = request.form.get('vendor_id', '')
+        if submitted_vid and str(submitted_vid) != str(session['vendor_id']):
+            error = 'Vendor mismatch — you can only register parts under your own account.'
+            return render_template('index.html', error=error, request=request, vendors=vendors)
         uid = request.form['uid']
         item_type = request.form['item_type']
         vendor = request.form['vendor']
@@ -1343,6 +1683,12 @@ def index():
                 conn.close()
         except Exception as e:
             print(f"[TMS Push] Exception: {e}")
+
+        try:
+            post_register_hooks(uid, item_type, vendor, risk_level,
+                                vendor_name=session.get('vendor_name'))
+        except Exception as _e:
+            print(f'[Hooks] {_e}')
 
         return redirect(url_for('view_record', uid=uid))
 
@@ -1579,6 +1925,13 @@ def checkout():
         conn.close()
 
         save_cart({})
+        try:
+            # Attach stock_before for inventory history
+            for _it in items:
+                _it['stock_before'] = parse_int(_it.get('stock', 0)) + _it['quantity']
+            post_purchase_hooks(order_no, items, customer_name)
+        except Exception as _e:
+            print(f'[Hooks] {_e}')
         return redirect(url_for('order_success', order_no=order_no))
 
     return render_template('checkout.html', items=items, totals=totals)
@@ -2109,6 +2462,519 @@ def retry_pending_sync():
 
         conn.close()
         time.sleep(10)
+
+
+
+# ============================================================
+# NEW ROUTES: Digital Passport, Traceability, Inspections,
+# Risk API, Divisions, Shipments, Inventory, Audit, Admin+
+# ============================================================
+
+@app.route('/component/<uid>')
+def component_passport(uid):
+    """Public digital passport for a railway component."""
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM fittings WHERE uid=?", (uid,)).fetchone()
+    conn.close()
+    if not row:
+        return render_template('scan.html', uid=uid, risk='Unknown',
+                               vendor_risk='Unknown', inspection_date='N/A',
+                               qr_code='', error="Component not found"), 404
+    component = {k: row[k] for k in row.keys()}
+
+    # Check QR active
+    if not component.get('qr_active', 1):
+        return "This QR identity has been deactivated.", 410
+
+    vendor_meta = get_vendor_meta(component.get('vendor_id'))
+    warranty_status = compute_warranty_status(component.get('warranty_end'))
+    lifecycle_status = determine_lifecycle_status(component)
+    events = get_component_traceability(uid)
+    inspections = get_component_inspections(uid)
+
+    # Get or build risk assessment
+    risk_assessment = get_latest_risk_assessment(uid)
+    if not risk_assessment:
+        risk_assessment = build_structured_risk(component)
+
+    record_audit('QR_VERIFIED', 'component', uid, 'public')
+
+    return render_template(
+        'component_passport.html',
+        component=component,
+        vendor_meta=vendor_meta,
+        warranty_status=warranty_status,
+        lifecycle_status=lifecycle_status,
+        events=events,
+        inspections=inspections,
+        risk_assessment=risk_assessment,
+        verified_at=datetime.now().strftime('%Y-%m-%d %H:%M UTC'),
+    )
+
+
+@app.route('/api/component/<uid>/traceability')
+def api_component_traceability(uid):
+    conn = get_db_connection()
+    row = conn.execute("SELECT uid, item_type, vendor, risk, lifecycle_status FROM fittings WHERE uid=?", (uid,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'error': 'Component not found'}), 404
+    return jsonify({
+        'uid': uid,
+        'item_type': row['item_type'],
+        'vendor': row['vendor'],
+        'risk': row['risk'],
+        'lifecycle_status': row['lifecycle_status'],
+        'events': get_component_traceability(uid),
+    })
+
+
+@app.route('/api/component/<uid>/risk')
+def api_component_risk(uid):
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM fittings WHERE uid=?", (uid,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'error': 'Component not found'}), 404
+    component = {k: row[k] for k in row.keys()}
+    assessment = build_structured_risk(component)
+    return jsonify(assessment)
+
+
+@app.route('/api/component/<uid>/warranty')
+def api_component_warranty(uid):
+    conn = get_db_connection()
+    row = conn.execute("SELECT uid, warranty_end, supply_date FROM fittings WHERE uid=?", (uid,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'error': 'Component not found'}), 404
+    warranty_end = row['warranty_end']
+    status = compute_warranty_status(warranty_end)
+    days_remaining = None
+    if warranty_end:
+        try:
+            end = datetime.strptime(warranty_end, "%Y-%m-%d").date()
+            days_remaining = (end - datetime.today().date()).days
+        except Exception:
+            pass
+    return jsonify({'uid': uid, 'warranty_end': warranty_end,
+                    'status': status, 'days_remaining': days_remaining})
+
+
+@app.route('/api/divisions')
+def api_divisions():
+    conn = get_vendor_db_connection()
+    rows = conn.execute("SELECT * FROM railway_divisions WHERE status='ACTIVE' ORDER BY zone, name").fetchall()
+    conn.close()
+    return jsonify([{k: row[k] for k in row.keys()} for row in rows])
+
+
+@app.route('/api/component/<uid>/inspections', methods=['GET', 'POST'])
+def api_component_inspections(uid):
+    if request.method == 'POST':
+        if 'vendor_id' not in session:
+            return jsonify({'error': 'Authentication required'}), 401
+        conn = get_db_connection()
+        row = conn.execute("SELECT vendor_id FROM fittings WHERE uid=?", (uid,)).fetchone()
+        conn.close()
+        if not row:
+            return jsonify({'error': 'Component not found'}), 404
+        if row['vendor_id'] and str(row['vendor_id']) != str(session['vendor_id']):
+            return jsonify({'error': 'Forbidden'}), 403
+
+        data = request.get_json() or request.form
+        inspector_name = str(data.get('inspector_name', '')).strip() or session.get('vendor_name', 'Inspector')
+        inspection_date = str(data.get('inspection_date', datetime.today().strftime('%Y-%m-%d')))
+        status = str(data.get('status', 'PASSED')).upper()
+        if status not in ('PASSED', 'FAILED', 'PENDING', 'CONDITIONAL'):
+            status = 'PENDING'
+        findings = str(data.get('findings', '')).strip()
+        notes = str(data.get('notes', '')).strip()
+        risk_level = str(data.get('risk_level', 'Low'))
+        next_inspection_date = str(data.get('next_inspection_date', '')).strip() or None
+        now = datetime.now().isoformat(timespec='seconds')
+
+        conn = get_db_connection()
+        conn.execute(
+            """INSERT INTO component_inspections
+               (uid,inspector_name,inspection_date,status,findings,notes,risk_level,next_inspection_date,created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (uid, inspector_name, inspection_date, status, findings, notes, risk_level, next_inspection_date, now)
+        )
+        conn.commit()
+        conn.close()
+
+        record_traceability_event(
+            uid, 'INSPECTED',
+            f"Inspection {status} by {inspector_name}. {findings}".strip(),
+            actor=inspector_name
+        )
+        record_audit('INSPECTION_RECORDED', 'component', uid, session.get('vendor_name'))
+
+        if request.is_json:
+            return jsonify({'success': True, 'status': status})
+        return redirect(url_for('component_passport', uid=uid))
+
+    return jsonify(get_component_inspections(uid))
+
+
+@app.route('/api/inventory/<uid>/history')
+def api_inventory_history(uid):
+    if 'vendor_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    conn = get_db_connection()
+    row = conn.execute("SELECT vendor_id, stock, reserved_stock FROM fittings WHERE uid=?", (uid,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Not found'}), 404
+    if row['vendor_id'] and str(row['vendor_id']) != str(session['vendor_id']):
+        conn.close()
+        return jsonify({'error': 'Forbidden'}), 403
+    rows = conn.execute(
+        "SELECT * FROM inventory_history WHERE uid=? ORDER BY created_at DESC LIMIT 50", (uid,)
+    ).fetchall()
+    conn.close()
+    total = parse_int(row['stock'])
+    reserved = parse_int(row['reserved_stock'])
+    return jsonify({
+        'uid': uid,
+        'total_stock': total,
+        'reserved_stock': reserved,
+        'available_stock': max(total - reserved, 0),
+        'history': [{k: r[k] for k in r.keys()} for r in rows],
+    })
+
+
+@app.route('/api/orders/<order_no>/shipment', methods=['POST'])
+def create_shipment(order_no):
+    if 'vendor_id' not in session:
+        return jsonify({'error': 'Authentication required'}), 401
+    vendor_id = str(session['vendor_id'])
+    conn = get_db_connection()
+    order = conn.execute("SELECT * FROM marketplace_orders WHERE order_no=?", (order_no,)).fetchone()
+    if not order:
+        conn.close()
+        return jsonify({'error': 'Order not found'}), 404
+    owned = conn.execute(
+        "SELECT 1 FROM marketplace_order_items WHERE order_id=? AND vendor_id=?",
+        (order['id'], vendor_id)
+    ).fetchone()
+    if not owned:
+        conn.close()
+        return jsonify({'error': 'Forbidden'}), 403
+
+    data = request.get_json() or request.form
+    courier = str(data.get('courier', 'Indian Railways Logistics')).strip()
+    tracking_number = str(data.get('tracking_number', '')).strip() or f"IRL-{order_no[-6:]}"
+    estimated_delivery = str(data.get('estimated_delivery', '')).strip() or None
+    now = datetime.now().isoformat(timespec='seconds')
+
+    existing = conn.execute("SELECT id FROM shipments WHERE order_no=? AND vendor_id=?", (order_no, vendor_id)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({'error': 'Shipment already exists for this order'}), 409
+
+    conn.execute(
+        """INSERT INTO shipments (order_id,order_no,vendor_id,courier,tracking_number,status,estimated_delivery,shipped_at,created_at)
+           VALUES (?,?,?,?,?,'SHIPPED',?,?,?)""",
+        (order['id'], order_no, vendor_id, courier, tracking_number, estimated_delivery, now, now)
+    )
+    conn.execute("UPDATE marketplace_orders SET status='Shipped' WHERE order_no=?", (order_no,))
+
+    # Record traceability for each component in this order
+    items = conn.execute(
+        "SELECT uid FROM marketplace_order_items WHERE order_id=? AND vendor_id=?",
+        (order['id'], vendor_id)
+    ).fetchall()
+    conn.commit()
+    conn.close()
+
+    for item in items:
+        record_traceability_event(
+            item['uid'], 'SHIPPED',
+            f"Shipped via {courier}. Tracking: {tracking_number}",
+            actor=session.get('vendor_name'), order_no=order_no
+        )
+    record_audit('SHIPMENT_CREATED', 'order', order_no, session.get('vendor_name'),
+                 f"courier={courier} tracking={tracking_number}")
+
+    if request.is_json:
+        return jsonify({'success': True, 'tracking_number': tracking_number})
+    return redirect(url_for('vendor_dashboard', msg=f"Shipment created. Tracking: {tracking_number}"))
+
+
+@app.route('/api/orders/<order_no>/shipment')
+def get_shipment(order_no):
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM shipments WHERE order_no=? ORDER BY created_at DESC LIMIT 1", (order_no,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'error': 'No shipment found'}), 404
+    return jsonify({k: row[k] for k in row.keys()})
+
+
+@app.route('/admin/audit')
+def admin_audit_log():
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 200"
+    ).fetchall()
+    conn.close()
+    entries = [{k: row[k] for k in row.keys()} for row in rows]
+    return render_template('admin_audit.html', entries=entries)
+
+
+@app.route('/admin/analytics')
+def admin_analytics():
+    conn = get_db_connection()
+    c = conn.cursor()
+
+    # High-risk components
+    c.execute("SELECT uid, item_type, vendor, risk, inspection_date FROM fittings WHERE risk='High' ORDER BY uid LIMIT 20")
+    high_risk = [{k: row[k] for k in row.keys()} for row in c.fetchall()]
+
+    # Upcoming inspections (next 30 days)
+    today = datetime.today().date()
+    in_30 = (today + timedelta(days=30)).isoformat()
+    c.execute(
+        "SELECT uid, item_type, vendor, inspection_date FROM fittings WHERE inspection_date BETWEEN ? AND ? ORDER BY inspection_date",
+        (today.isoformat(), in_30)
+    )
+    upcoming_inspections = [{k: row[k] for k in row.keys()} for row in c.fetchall()]
+
+    # Warranty expiring soon
+    c.execute(
+        "SELECT uid, item_type, vendor, warranty_end FROM fittings WHERE warranty_end BETWEEN ? AND ? ORDER BY warranty_end",
+        (today.isoformat(), in_30)
+    )
+    expiring_warranty = [{k: row[k] for k in row.keys()} for row in c.fetchall()]
+
+    # Lifecycle breakdown
+    c.execute("SELECT lifecycle_status, COUNT(*) as cnt FROM fittings GROUP BY lifecycle_status ORDER BY cnt DESC")
+    lifecycle_counts = [{k: row[k] for k in row.keys()} for row in c.fetchall()]
+
+    # Top vendors by order revenue
+    c.execute("""
+        SELECT i.vendor, COALESCE(SUM(i.line_total),0) AS revenue, COUNT(DISTINCT i.order_id) AS orders
+        FROM marketplace_order_items i
+        GROUP BY i.vendor ORDER BY revenue DESC LIMIT 10
+    """)
+    top_vendors = [{k: row[k] for k in row.keys()} for row in c.fetchall()]
+
+    conn.close()
+
+    return jsonify({
+        'high_risk_components': high_risk,
+        'upcoming_inspections': upcoming_inspections,
+        'expiring_warranty': expiring_warranty,
+        'lifecycle_breakdown': lifecycle_counts,
+        'top_vendors_by_revenue': top_vendors,
+    })
+
+
+@app.route('/vendor/order/<order_no>/shipment', methods=['POST'])
+def vendor_create_shipment(order_no):
+    """Dashboard form-based shipment creation."""
+    return create_shipment(order_no)
+
+
+@app.route('/component/<uid>/inspect', methods=['POST'])
+def add_inspection(uid):
+    """Form-based inspection submission from the passport page."""
+    return api_component_inspections(uid)
+
+
+# Override /scan/<uid> to redirect to the full digital passport
+@app.route('/passport/<uid>')
+def passport_redirect(uid):
+    return redirect(url_for('component_passport', uid=uid))
+
+
+# ============================================================
+# ENHANCED: hook traceability into existing registration flow
+# ============================================================
+
+_original_index = index
+
+def _patched_index():
+    """Wrap index to record REGISTERED traceability event after insert."""
+    # We can't easily wrap the existing route, so traceability is recorded
+    # inside the checkout and registration routes directly.
+    return _original_index()
+
+
+# ============================================================
+# ENHANCED CHECKOUT: record traceability + inventory history
+# ============================================================
+
+# Monkey-patch checkout to add traceability after order placement
+_orig_checkout = checkout
+
+@app.route('/checkout_v2', methods=['GET', 'POST'])
+def checkout_v2():
+    """Not used - traceability is injected via post-order hook below."""
+    pass
+
+
+@app.after_request
+def after_request_hook(response):
+    return response
+
+
+# ============================================================
+# ENHANCED: /vendor/order/<order_no>/status with guards
+# ============================================================
+
+ALLOWED_TRANSITIONS = {
+    'Placed':           {'Accepted', 'Cancelled'},
+    'Accepted':         {'Packed', 'Cancelled'},
+    'Packed':           {'Shipped', 'Cancelled'},
+    'Shipped':          {'Out for Delivery'},
+    'Out for Delivery': {'Delivered'},
+    'Delivered':        {'Completed'},
+    'Completed':        set(),
+    'Cancelled':        set(),
+}
+
+
+@app.route('/vendor/order/<order_no>/status/v2', methods=['POST'])
+def update_order_status_v2(order_no):
+    """Status update with lifecycle guards and traceability."""
+    if 'vendor_id' not in session:
+        return redirect(url_for('vendor_login'))
+
+    next_status = request.form.get('status', '').strip()
+    vendor_id = str(session['vendor_id'])
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute(
+        """SELECT o.id, o.status FROM marketplace_orders o
+           JOIN marketplace_order_items i ON i.order_id=o.id
+           WHERE o.order_no=? AND i.vendor_id=? LIMIT 1""",
+        (order_no, vendor_id)
+    )
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return redirect(url_for('vendor_dashboard', msg="Order not found or access denied."))
+
+    current_status = row['status']
+    allowed = ALLOWED_TRANSITIONS.get(current_status, set())
+    if next_status not in allowed:
+        conn.close()
+        return redirect(url_for('vendor_dashboard',
+                                msg=f"Cannot move order from {current_status} to {next_status}."))
+
+    c.execute("UPDATE marketplace_orders SET status=? WHERE order_no=?", (next_status, order_no))
+
+    # If shipped, auto-create shipment record if not exists
+    if next_status == 'Shipped':
+        existing = c.execute("SELECT id FROM shipments WHERE order_no=? AND vendor_id=?",
+                             (order_no, vendor_id)).fetchone()
+        if not existing:
+            tracking = f"IRL-{order_no[-8:]}"
+            est_delivery = (datetime.today() + timedelta(days=7)).strftime('%Y-%m-%d')
+            now = datetime.now().isoformat(timespec='seconds')
+            c.execute(
+                """INSERT INTO shipments (order_id,order_no,vendor_id,courier,tracking_number,status,estimated_delivery,shipped_at,created_at)
+                   VALUES (?,?,?,'Indian Railways Logistics',?,'SHIPPED',?,?,?)""",
+                (row['id'], order_no, vendor_id, tracking, est_delivery, now, now)
+            )
+            # Record traceability for each component
+            items = c.execute(
+                "SELECT uid FROM marketplace_order_items WHERE order_id=? AND vendor_id=?",
+                (row['id'], vendor_id)
+            ).fetchall()
+            conn.commit()
+            for item in items:
+                record_traceability_event(
+                    item['uid'], 'SHIPPED',
+                    f"Dispatched via Indian Railways Logistics. Tracking: {tracking}",
+                    actor=session.get('vendor_name'), order_no=order_no
+                )
+
+    if next_status == 'Delivered':
+        c.execute("UPDATE shipments SET status='DELIVERED', delivered_at=? WHERE order_no=?",
+                  (datetime.now().isoformat(timespec='seconds'), order_no))
+        items = c.execute(
+            "SELECT uid FROM marketplace_order_items WHERE order_id=?", (row['id'],)
+        ).fetchall()
+        conn.commit()
+        for item in items:
+            record_traceability_event(
+                item['uid'], 'DELIVERED',
+                "Component delivered to buyer.",
+                actor=session.get('vendor_name'), order_no=order_no
+            )
+
+    conn.commit()
+    conn.close()
+    record_audit('ORDER_STATUS_CHANGED', 'order', order_no,
+                 session.get('vendor_name'), f"{current_status} -> {next_status}")
+    return redirect(url_for('vendor_dashboard', msg=f"Order {order_no} updated to {next_status}."))
+
+
+# ============================================================
+# ENHANCED ADMIN: divisions page
+# ============================================================
+
+@app.route('/admin/divisions')
+def admin_divisions():
+    conn = get_vendor_db_connection()
+    rows = conn.execute("SELECT * FROM railway_divisions ORDER BY zone, name").fetchall()
+    conn.close()
+    divisions = [{k: row[k] for k in row.keys()} for row in rows]
+    return jsonify(divisions)
+
+
+@app.route('/admin/high-risk')
+def admin_high_risk():
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT uid, item_type, vendor, risk, inspection_date, warranty_end FROM fittings WHERE risk='High' ORDER BY uid"
+    ).fetchall()
+    conn.close()
+    result = []
+    for row in rows:
+        d = {k: row[k] for k in row.keys()}
+        d['warranty_status'] = compute_warranty_status(d.get('warranty_end'))
+        result.append(d)
+    return jsonify(result)
+
+
+# ============================================================
+# HOOK: record REGISTERED event when a new component is saved
+# This is called from the index route after successful insert
+# ============================================================
+
+def post_register_hooks(uid, item_type, vendor, risk_level, vendor_name=None):
+    """Call after a component is successfully registered."""
+    record_traceability_event(
+        uid, 'REGISTERED',
+        f"Component '{item_type}' registered by vendor '{vendor}'.",
+        actor=vendor_name or vendor
+    )
+    record_audit('COMPONENT_REGISTERED', 'component', uid, vendor_name or vendor,
+                 f"type={item_type} risk={risk_level}")
+
+
+def post_purchase_hooks(order_no, items, customer_name):
+    """Call after a successful checkout."""
+    for item in items:
+        record_traceability_event(
+            item['uid'], 'PURCHASED',
+            f"Purchased by {customer_name}. Order: {order_no}",
+            actor=customer_name, order_no=order_no
+        )
+        record_inventory_change(
+            item['uid'], 'SOLD',
+            item.get('stock_before', 0), -item['quantity'],
+            reason=f"Order {order_no}", order_no=order_no, actor=customer_name
+        )
+    record_audit('ORDER_PLACED', 'order', order_no, customer_name,
+                 f"{len(items)} items")
+
 
 # === Run app ===
 if __name__ == '__main__':

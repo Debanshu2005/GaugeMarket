@@ -56,28 +56,28 @@
 
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-      <div class="rq-metric">
+      <div class="rq-metric animate-fade-in-up delay-100">
         <div class="rq-metric-label"><i class="bi bi-box-seam me-1"></i>Products</div>
-        <div class="rq-metric-value">{{ products|length }}</div>
+        <div class="rq-metric-value rq-stat-counter" data-target="{{ products|length }}">0</div>
         <div class="rq-metric-sub">QR-linked parts</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="rq-metric">
+      <div class="rq-metric animate-fade-in-up delay-200">
         <div class="rq-metric-label"><i class="bi bi-receipt me-1"></i>Orders</div>
-        <div class="rq-metric-value">{{ orders|length }}</div>
+        <div class="rq-metric-value rq-stat-counter" data-target="{{ orders|length }}">0</div>
         <div class="rq-metric-sub">Total received</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="rq-metric">
+      <div class="rq-metric animate-fade-in-up delay-300">
         <div class="rq-metric-label"><i class="bi bi-star-fill me-1"></i>Rating</div>
         <div class="rq-metric-value">{{ review_data.avg }}</div>
         <div class="rq-metric-sub">{{ review_data.count }} reviews</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="rq-metric">
+      <div class="rq-metric animate-fade-in-up delay-400">
         <div class="rq-metric-label"><i class="bi bi-shield-check me-1"></i>Risk Level</div>
         <div class="rq-metric-value" style="font-size:1.25rem;">{{ vendor.vendor_risk or 'Low' }}</div>
         <div class="rq-metric-sub">Vendor assessment</div>
@@ -88,21 +88,35 @@
   <div class="row g-4">
     <div class="col-lg-8">
 
-      <div class="rq-card mb-4">
+        <div class="rq-card mb-4">
         <div class="rq-card-header">
           <h2>Revenue Performance</h2>
           <span style="font-size:.8125rem;color:var(--ink-3);">Division supply orders</span>
         </div>
         <div class="rq-card-body">
+          {% if revenue_series %}
+          {% set max_rev = namespace(val=1) %}
+          {% for point in revenue_series %}{% if point.revenue > max_rev.val %}{% set max_rev.val = point.revenue %}{% endif %}{% endfor %}
+          <div class="rq-chart" style="margin-bottom:16px;">
+            {% for point in revenue_series %}
+            <div class="rq-chart-col">
+              <div class="rq-chart-bar" style="height:{{ ((point.revenue / max_rev.val) * 100)|int }}%;animation-delay:{{ loop.index0 * 0.07 }}s;">
+                <div class="rq-chart-tooltip">{{ point.month }}: ₹{{ '%.0f'|format(point.revenue) }}</div>
+              </div>
+              <div class="rq-chart-label">{{ point.month[:3] }}</div>
+            </div>
+            {% endfor %}
+          </div>
           {% for point in revenue_series %}
-          <div style="margin-bottom:14px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
               <span style="font-size:.875rem;font-weight:600;">{{ point.month }}</span>
-              <span style="font-size:.8125rem;color:var(--ink-3);">₹{{ '%.0f'|format(point.revenue) }} &nbsp;·&nbsp; {{ point.units }} units</span>
+              <span style="font-size:.8125rem;color:var(--ink-3);" class="rq-mono">₹{{ '%.0f'|format(point.revenue) }} · {{ point.units }} units</span>
             </div>
             <div class="rq-bar-track"><div class="rq-bar-fill" style="width:{{ point.bar_pct }}%;"></div></div>
           </div>
           {% endfor %}
+          {% endif %}
         </div>
       </div>
 
@@ -160,7 +174,7 @@
                 <td style="font-weight:700;">₹{{ '%.2f'|format(order.line_total or 0) }}</td>
                 <td><span class="rq-badge rq-badge-blue">{{ order.status }}</span></td>
                 <td>
-                  <form method="post" action="{{ url_for('update_order_status', order_no=order.order_no) }}" style="display:flex;gap:6px;">
+                  <form method="post" action="{{ url_for('update_order_status_v2', order_no=order.order_no) }}" style="display:flex;gap:6px;">
                     <select name="status" class="form-select form-select-sm" style="min-width:130px;">
                       {% for status in ['Accepted','Packed','Shipped','Out for Delivery','Delivered','Completed','Cancelled'] %}
                       <option value="{{ status }}" {% if order.status == status %}selected{% endif %}>{{ status }}</option>
@@ -240,5 +254,19 @@
   <img src="{{ url_for('static', filename='image/rail.png') }}" alt="Indian Railways" style="height:22px;opacity:.5;vertical-align:middle;margin-right:8px;">
   © Indian Railways Fittings Department
 </footer>
+
+<script>
+document.querySelectorAll('.rq-stat-counter').forEach(function(el) {
+  var target = parseInt(el.dataset.target) || 0;
+  var prefix = el.dataset.prefix || '';
+  var start = 0;
+  var step = Math.max(1, Math.ceil(target / 80));
+  var timer = setInterval(function() {
+    start = Math.min(start + step, target);
+    el.textContent = prefix + start.toLocaleString();
+    if (start >= target) clearInterval(timer);
+  }, 16);
+});
+</script>
 </body>
 </html>
