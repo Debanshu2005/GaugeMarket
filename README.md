@@ -19,7 +19,7 @@ Vendors can register, manage fittings, generate AI-styled QR codes, and transmit
 <img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/047047c1-9eb5-4094-8109-4b0ee1d1c0e5" />
 
 ### Data Entry Form
-> *Add new fittings with UID, type, lot, supply date, warranty, manufacturer info, and risk fields.*
+<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/9b6d844b-79c9-46e0-a651-b2db22393524" />
 
 ### QR Code Engraving Simulation
 <img width="1280" height="680" alt="image" src="https://github.com/user-attachments/assets/e23b7309-2e42-41c0-b828-992afef1cd7e" />
