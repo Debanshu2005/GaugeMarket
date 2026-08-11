@@ -254,6 +254,20 @@ def ensure_table_columns():
         )
     """)
     c.execute("""
+        CREATE TABLE IF NOT EXISTS coupons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            discount_type TEXT NOT NULL DEFAULT 'percentage',
+            discount_value REAL NOT NULL DEFAULT 0,
+            min_order_value REAL DEFAULT 0,
+            max_uses INTEGER DEFAULT 100,
+            used_count INTEGER DEFAULT 0,
+            active INTEGER DEFAULT 1,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    c.execute("""
         CREATE TABLE IF NOT EXISTS marketplace_reviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             uid TEXT NOT NULL,
@@ -1811,9 +1825,32 @@ def checkout():
         customer_phone = request.form.get('customer_phone', '').strip()
         shipping_address = request.form.get('shipping_address', '').strip()
         payment_method = request.form.get('payment_method', 'COD').strip()
+        coupon_code = request.form.get('coupon_code', '').strip().upper()
 
         if not customer_name or not customer_email or not shipping_address:
             return render_template('checkout.html', items=items, totals=totals, error="Name, email, and shipping address are required.")
+
+        # Server-side coupon validation
+        coupon_discount = 0.0
+        coupon_id_to_update = None
+        if coupon_code:
+            conn_c = get_db_connection()
+            crow = conn_c.execute("SELECT * FROM coupons WHERE code=? AND active=1", (coupon_code,)).fetchone()
+            if crow:
+                cpn = {k: crow[k] for k in crow.keys()}
+                if cpn['used_count'] < cpn['max_uses'] and totals['subtotal'] >= cpn['min_order_value']:
+                    if cpn['discount_type'] == 'percentage':
+                        coupon_discount = round(totals['subtotal'] * cpn['discount_value'] / 100, 2)
+                    else:
+                        coupon_discount = min(cpn['discount_value'], totals['subtotal'])
+                    coupon_id_to_update = cpn['id']
+            conn_c.close()
+
+        # Recalculate totals with coupon
+        adjusted_subtotal = totals['subtotal'] - coupon_discount
+        adjusted_grand = round(adjusted_subtotal + totals['tax_total'] + totals['shipping_total'], 2)
+        totals['discount_total'] = round(totals['discount_total'] + coupon_discount, 2)
+        totals['grand_total'] = adjusted_grand
 
         conn = get_db_connection()
         try:
@@ -1830,6 +1867,9 @@ def checkout():
                     conn.close()
                     return render_template('checkout.html', items=items, totals=totals,
                                            error=f"{item['item_type']} does not have enough stock.")
+
+            if coupon_id_to_update:
+                c.execute("UPDATE coupons SET used_count = used_count + 1 WHERE id=?", (coupon_id_to_update,))
 
             order_no = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3).upper()}"
             c.execute("""
@@ -2347,6 +2387,244 @@ def test_qr(uid):
 
     display_path, _ = save_qr_image(uid, qr_content)
     return send_file(display_path, mimetype='image/png')
+
+
+# ── Coupon system ────────────────────────────────────────────────────────────
+
+@app.route('/apply-coupon', methods=['POST'])
+def apply_coupon():
+    code = (request.get_json() or request.form).get('code', '').strip().upper()
+    try:
+        order_value = float((request.get_json() or request.form).get('order_value', 0))
+    except (TypeError, ValueError):
+        order_value = 0
+
+    if not code:
+        return jsonify({'valid': False, 'message': 'Enter a coupon code.'})
+
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT * FROM coupons WHERE code=? AND active=1", (code,)
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({'valid': False, 'message': 'Invalid or expired coupon.'})
+
+    coupon = {k: row[k] for k in row.keys()}
+
+    if coupon['used_count'] >= coupon['max_uses']:
+        return jsonify({'valid': False, 'message': 'Coupon usage limit reached.'})
+
+    if order_value < coupon['min_order_value']:
+        return jsonify({
+            'valid': False,
+            'message': f"Minimum order value ₹{coupon['min_order_value']:.0f} required."
+        })
+
+    if coupon['discount_type'] == 'percentage':
+        discount = round(order_value * coupon['discount_value'] / 100, 2)
+        label = f"{coupon['discount_value']:.0f}% off"
+    else:
+        discount = min(coupon['discount_value'], order_value)
+        label = f"₹{coupon['discount_value']:.0f} off"
+
+    return jsonify({
+        'valid': True,
+        'code': code,
+        'discount': discount,
+        'label': label,
+        'message': f"Coupon applied: {label}"
+    })
+
+
+@app.route('/admin/coupons', methods=['GET', 'POST'])
+@admin_required
+def admin_coupons():
+    conn = get_db_connection()
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip().upper()
+        discount_type = request.form.get('discount_type', 'percentage')
+        discount_value = parse_money(request.form.get('discount_value'))
+        min_order_value = parse_money(request.form.get('min_order_value'))
+        max_uses = parse_int(request.form.get('max_uses'), 100)
+        now = datetime.now().isoformat(timespec='seconds')
+        try:
+            conn.execute(
+                """INSERT INTO coupons (code, discount_type, discount_value, min_order_value, max_uses, used_count, active, created_at)
+                   VALUES (?, ?, ?, ?, ?, 0, 1, ?)""",
+                (code, discount_type, discount_value, min_order_value, max_uses, now)
+            )
+            conn.commit()
+            record_audit('COUPON_CREATED', 'coupon', code, 'admin', f"type={discount_type} value={discount_value}")
+        except Exception as e:
+            conn.close()
+            return jsonify({'error': str(e)}), 400
+        conn.close()
+        return redirect(url_for('admin_coupons'))
+
+    rows = conn.execute("SELECT * FROM coupons ORDER BY created_at DESC").fetchall()
+    conn.close()
+    coupons = [{k: row[k] for k in row.keys()} for row in rows]
+    return jsonify(coupons)
+
+
+@app.route('/admin/coupons/<int:coupon_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_coupon(coupon_id):
+    conn = get_db_connection()
+    conn.execute("UPDATE coupons SET active = 1 - active WHERE id=?", (coupon_id,))
+    conn.commit()
+    conn.close()
+    return redirect(request.referrer or url_for('admin_coupons'))
+
+
+# ── PDF Invoice ───────────────────────────────────────────────────────────────
+
+@app.route('/invoice/<order_no>')
+def download_invoice(order_no):
+    conn = get_db_connection()
+    order_row = conn.execute("SELECT * FROM marketplace_orders WHERE order_no=?", (order_no,)).fetchone()
+    if not order_row:
+        conn.close()
+        return "Order not found", 404
+    order = {k: order_row[k] for k in order_row.keys()}
+    items_rows = conn.execute("SELECT * FROM marketplace_order_items WHERE order_id=?", (order['id'],)).fetchall()
+    items = [{k: row[k] for k in row.keys()} for row in items_rows]
+    conn.close()
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm,
+                                leftMargin=20*mm, rightMargin=20*mm)
+        styles = getSampleStyleSheet()
+        story = []
+
+        # Header
+        story.append(Paragraph("<b>GaugeMarket — Railway Supply Chain</b>", styles['Title']))
+        story.append(Paragraph("Indian Railways Fittings Department", styles['Normal']))
+        story.append(Spacer(1, 6*mm))
+
+        # Invoice meta
+        meta = [
+            ["Invoice / Order No:", order['order_no']],
+            ["Date:", order['created_at'][:10] if order['created_at'] else ''],
+            ["Status:", order['status']],
+            ["Payment:", order['payment_method']],
+        ]
+        meta_table = Table(meta, colWidths=[50*mm, 110*mm])
+        meta_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ]))
+        story.append(meta_table)
+        story.append(Spacer(1, 5*mm))
+
+        # Customer info
+        story.append(Paragraph("<b>Bill To</b>", styles['Normal']))
+        story.append(Paragraph(order['customer_name'], styles['Normal']))
+        story.append(Paragraph(order['customer_email'], styles['Normal']))
+        if order.get('customer_phone'):
+            story.append(Paragraph(order['customer_phone'], styles['Normal']))
+        story.append(Paragraph(order.get('shipping_address', ''), styles['Normal']))
+        story.append(Spacer(1, 5*mm))
+
+        # Items table
+        table_data = [["#", "Product", "UID", "Seller", "Qty", "Unit Price", "Total"]]
+        for i, item in enumerate(items, 1):
+            table_data.append([
+                str(i),
+                item['product_name'],
+                item['uid'],
+                item.get('vendor', ''),
+                str(item['quantity']),
+                f"Rs {item['unit_price']:.2f}",
+                f"Rs {item['line_total']:.2f}",
+            ])
+
+        col_widths = [8*mm, 45*mm, 28*mm, 30*mm, 10*mm, 22*mm, 22*mm]
+        items_table = Table(table_data, colWidths=col_widths)
+        items_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1e3a5f')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 8),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#f5f5f5'), colors.white]),
+            ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#cccccc')),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+        ]))
+        story.append(items_table)
+        story.append(Spacer(1, 5*mm))
+
+        # Totals
+        totals_data = [
+            ["Subtotal", f"Rs {order['subtotal']:.2f}"],
+            ["Discount", f"- Rs {order['discount_total']:.2f}"],
+            ["GST (5%)", f"Rs {order['tax_total']:.2f}"],
+            ["Shipping", f"Rs {order['shipping_total']:.2f}"],
+            ["Grand Total", f"Rs {order['grand_total']:.2f}"],
+        ]
+        totals_table = Table(totals_data, colWidths=[130*mm, 35*mm])
+        totals_table.setStyle(TableStyle([
+            ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+            ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('LINEABOVE', (0,-1), (-1,-1), 1, colors.black),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ]))
+        story.append(totals_table)
+        story.append(Spacer(1, 8*mm))
+        story.append(Paragraph(
+            "All components are QR-verified through the Indian Railways supply chain.",
+            ParagraphStyle('footer', fontSize=8, textColor=colors.HexColor('#666666'))
+        ))
+
+        doc.build(story)
+        buf.seek(0)
+        return send_file(buf, as_attachment=True,
+                         download_name=f"invoice_{order_no}.pdf",
+                         mimetype='application/pdf')
+
+    except ImportError:
+        # reportlab not available — return plain text invoice
+        lines_out = [
+            f"INVOICE — {order['order_no']}",
+            f"Date: {order['created_at'][:10] if order['created_at'] else ''}",
+            f"Customer: {order['customer_name']} <{order['customer_email']}>",
+            f"Address: {order['shipping_address']}",
+            f"Payment: {order['payment_method']}",
+            "",
+            f"{'Product':<30} {'Qty':>5} {'Unit':>10} {'Total':>10}",
+            "-" * 60,
+        ]
+        for item in items:
+            lines_out.append(
+                f"{item['product_name']:<30} {item['quantity']:>5} "
+                f"Rs{item['unit_price']:>9.2f} Rs{item['line_total']:>9.2f}"
+            )
+        lines_out += [
+            "-" * 60,
+            f"{'Subtotal':>46} Rs{order['subtotal']:>9.2f}",
+            f"{'GST (5%)':>46} Rs{order['tax_total']:>9.2f}",
+            f"{'Grand Total':>46} Rs{order['grand_total']:>9.2f}",
+        ]
+        text = "\n".join(lines_out)
+        return send_file(
+            io.BytesIO(text.encode()),
+            as_attachment=True,
+            download_name=f"invoice_{order_no}.txt",
+            mimetype='text/plain'
+        )
+
+
 
 # === Background threads ===
 def periodic_risk_update():

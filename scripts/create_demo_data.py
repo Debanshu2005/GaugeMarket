@@ -284,6 +284,20 @@ def seed():
              (datetime.now() - timedelta(days=random.randint(1, 60))).isoformat(timespec="seconds")),
         )
 
+    # ── Demo coupons ───────────────────────────────────────────────────────────
+    demo_coupons = [
+        ("RAIL10",    "percentage", 10,   0,    100),   # 10% off, no min, 100 uses
+        ("FLAT500",   "flat",       500,  2000, 50),    # ₹500 off on orders ≥₹2000
+        ("WELCOME",   "percentage", 15,   500,  200),   # 15% off for new buyers ≥₹500
+    ]
+    for code, dtype, dval, min_order, max_uses in demo_coupons:
+        conn.execute(
+            """INSERT INTO coupons
+               (code, discount_type, discount_value, min_order_value, max_uses, used_count, active, created_at)
+               VALUES (?, ?, ?, ?, ?, 0, 1, ?)""",
+            (code, dtype, dval, min_order, max_uses, now_iso),
+        )
+
     conn.commit()
     conn.close()
     print("[Seed] Done.")
@@ -296,3 +310,4 @@ if __name__ == "__main__":
     print("   Vendor login : seller@railtrust.local / seller123")
     print("   Admin login  : /admin  password: admin1234")
     print("   Second vendor: delhi@tracksol.local / track123")
+    print("   Demo coupons : RAIL10 (10% off), FLAT500 (₹500 off ≥₹2000), WELCOME (15% off ≥₹500)")

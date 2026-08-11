@@ -7,3 +7,4 @@ numpy==2.3.2
 opencv-python-headless==4.11.0.86
 scikit-learn==1.7.1
 joblib==1.5.1
+reportlab==4.2.5

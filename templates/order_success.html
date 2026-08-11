@@ -86,8 +86,8 @@
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
       <a href="{{ url_for('track_order') }}" class="btn btn-primary"><i class="bi bi-geo-alt"></i> Track This Order</a>
-      <a href="{{ url_for('shop') }}" class="btn btn-outline-primary"><i class="bi bi-shop"></i> Continue Shopping</a>
-      <a href="{{ url_for('view_all') }}" class="btn btn-outline-secondary"><i class="bi bi-table"></i> Inventory Records</a>
+      <a href="{{ url_for('download_invoice', order_no=order.order_no) }}" class="btn btn-outline-primary"><i class="bi bi-file-earmark-pdf"></i> Download Invoice</a>
+      <a href="{{ url_for('shop') }}" class="btn btn-outline-secondary"><i class="bi bi-shop"></i> Continue Shopping</a>
     </div>
   </div>
 </div>

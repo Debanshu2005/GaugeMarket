@@ -1,117 +1,121 @@
-# GaugeMarket — Railway QR Vendor & Marketplace Portal
+# GaugeMarket — Railway Supply Chain & Multi-Vendor Marketplace
 
-This repository contains the full-stack **Vendor Portal + Marketplace** for the Railway QR Project.  
-Vendors can register, manage fittings, generate AI-styled QR codes, and transmit G-codes to an ESP32 for laser engraving. Buyers can browse the marketplace, add products to cart, place orders, track shipments, and leave reviews.
+**Live Demo:** https://rail-qr-marketplace.vercel.app  
+**GitHub:** https://github.com/Debanshu2005/GaugeMarket
+
+A production-ready multi-vendor e-commerce platform built for the Indian Railways supply chain. Vendors register railway components, generate laser-engravable QR codes, list products on the marketplace, and fulfil orders — while buyers get full component traceability from manufacture to delivery.
 
 ---
 
-## Demo Access
+## Test Credentials
 
-If you have seeded the database using `python scripts/create_demo_data.py`, you can use the following credentials to explore the application:
+| Role | Email / Access | Password |
+|---|---|---|
+| **Admin** | `/admin/login` | `admin1234` |
+| **Vendor / Seller** | `seller@railtrust.local` | `seller123` |
+| **Customer** | No login required — browse, cart, checkout as guest | — |
 
-- **Admin Login**: Located in the top-right navigation menu.
-  - Password: `admin1234` (configurable via `ADMIN_PASSWORD` environment variable)
-- **Vendor Login**:
-  - Email: `seller@railtrust.local`
-  - Password: `seller123`
+**Demo Coupon Codes:** `RAIL10` (10% off), `FLAT500` (₹500 off on orders ≥₹2,000), `WELCOME` (15% off on orders ≥₹500)
+
+> Seed the database first: `python scripts/create_demo_data.py`
 
 ---
 
 ## Screenshots
 
-### Vendor Registration Page
-<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/8b1a14f6-f125-4d22-9cd1-08677d3c6603" />
-
-
-### Vendor Login Page
-<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/3e867776-35bf-401c-b376-974be1bc97ef" />
-
+### Landing Page
+<img width="1920" height="1020" alt="Landing" src="https://github.com/user-attachments/assets/8b1a14f6-f125-4d22-9cd1-08677d3c6603" />
 
 ### Vendor Dashboard
-<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/047047c1-9eb5-4094-8109-4b0ee1d1c0e5" />
+<img width="1920" height="1020" alt="Vendor Dashboard" src="https://github.com/user-attachments/assets/047047c1-9eb5-4094-8109-4b0ee1d1c0e5" />
 
-### Data Entry Form
-<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/9b6d844b-79c9-46e0-a651-b2db22393524" />
+### Component Registration
+<img width="1920" height="1020" alt="Data Entry" src="https://github.com/user-attachments/assets/9b6d844b-79c9-46e0-a651-b2db22393524" />
 
-### QR Code Engraving Simulation
-<img width="1280" height="680" alt="image" src="https://github.com/user-attachments/assets/e23b7309-2e42-41c0-b828-992afef1cd7e" />
+### QR Engraving Simulation
+<img width="1280" height="680" alt="QR Engraving" src="https://github.com/user-attachments/assets/e23b7309-2e42-41c0-b828-992afef1cd7e" />
 
- ### Hardware (esp32) -Sofware pipeline
-<img width="1280" height="680" alt="image" src="https://github.com/user-attachments/assets/ebafc741-d78e-411a-bdcd-8fd3fa5d8ae0" />
+### ESP32 Hardware Pipeline
+<img width="1280" height="680" alt="ESP32 Pipeline" src="https://github.com/user-attachments/assets/ebafc741-d78e-411a-bdcd-8fd3fa5d8ae0" />
 
-### Marketplace Shop
-<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/7ac098f9-65c8-4354-9182-89b93c026c5b" />
+### Marketplace
+<img width="1920" height="1020" alt="Marketplace" src="https://github.com/user-attachments/assets/7ac098f9-65c8-4354-9182-89b93c026c5b" />
 
 ### Admin Dashboard
-<img width="1920" height="1020" alt="image" src="https://github.com/user-attachments/assets/9a7d4138-9b73-4cc9-a65a-f35dbca6e55d" />
+<img width="1920" height="1020" alt="Admin Dashboard" src="https://github.com/user-attachments/assets/9a7d4138-9b73-4cc9-a65a-f35dbca6e55d" />
 
 ---
 
 ## Features
 
-### 🔐 Vendor Registration & Login
-- Secure password hashing (salt + SHA-256).
-- Each vendor gets a personalized dashboard with revenue analytics and order management.
+### Multi-Vendor Marketplace
+- Vendor registration and login with secure password hashing (salt + SHA-256)
+- Each vendor manages their own product catalogue, inventory, and orders
+- Vendor isolation — sellers cannot access each other's products, orders, or analytics
+- Vendor public profile with reviews and ratings
+- Revenue analytics with monthly breakdown chart
 
-### 📊 Vendor Dashboard & QR Management
-- View, add, and manage fittings.
-- Each vendor receives a unique identification QR code.
-- Revenue chart with monthly breakdown.
-- Incoming order management with status updates.
+### Component Registration & QR Identity
+- Register railway components with full metadata: UID, type, lot, warranty, manufacturer details
+- Each component gets a **unique digital identity** — two QR variants generated automatically:
+  - **Display QR** — styled with railway logo for web UI
+  - **Engrave QR** — strict 1-bit black/white for laser engraving
+- QR encodes a public passport URL — no sensitive data embedded
+- On-demand QR regeneration
 
-### 📝 Data Entry for Fittings
-- Enter details: UID, item type, vendor, lot, supply date, warranty, manufacturer date/number.
-- Data stored in SQLite databases for inspections and tracking.
-- Marketplace settings (price, discount, stock, category) can be configured per product.
+### Digital Component Passport
+- Public passport page per component: `/component/<uid>`
+- Shows identity, vendor, warranty status, risk assessment, inspection history
+- Full traceability timeline (REGISTERED → PURCHASED → SHIPPED → DELIVERED)
+- Warranty status calculated live: ACTIVE / EXPIRING_SOON / EXPIRED
 
-### 🤖 AI-Styled QR Code Generation
-- Anime-themed QR codes with railway logo embedding.
-- Two variants generated per fitting:
-  - **Display QR** — colorful, themed for the web UI.
-  - **Engrave QR** — strict 1-bit black/white for laser engraving.
+### AI Risk Assessment
+- Hybrid keyword + scikit-learn model scores each component
+- Risk factors: inspection notes, warranty status, vendor aggregate risk, overdue inspections
+- Structured output: Risk Level, Risk Score (0–100), Risk Factors, Recommendation
+- Risk persisted to database and displayed on passport and admin intelligence
 
-### ⚙️ G-Code Generation & ESP32 Transmission
-- Three G-code generation methods:
-  - **Raster** — line-by-line zigzag scan (default).
-  - **Vector** — contour-following for smoother paths.
-  - **Fallback** — simple horizontal-run scanning.
-- G-codes transmitted to an ESP32 over WebSocket for physical engraving.
+### G-Code Generation & ESP32 Engraving
+- Three G-code generation modes: Raster (zigzag), Vector (contour), Fallback (horizontal run)
+- G-code streamed to ESP32 over WebSocket (`ws://<ESP32_IP>:81`)
+- Vendor QR codes also engravable with the same pipeline
 
-### 🛡️ AI-Based Risk Assessment
-- Keyword-based risk detection from fitting notes (`leak`, `corrosion`, `crack` → High risk).
-- scikit-learn model for predictive risk scoring.
-- Anomaly detection on QR scan patterns.
+### Marketplace & Shopping
+- Browse and filter by category, risk level, stock availability
+- Search by product name, UID, vendor, category
+- Shopping cart with quantity management and atomic stock reservation
+- Coupon system: flat and percentage discounts
+- Checkout with shipping details and payment method selection
+- Order confirmation with downloadable PDF invoice
 
-### 📈 Vendor Risk Assessment
-- Aggregate risk calculation based on failure count across all products a vendor ships.
-- Risk levels: Low / Medium / High.
+### Order Management
+- Controlled order state machine: Placed → Accepted → Packed → Shipped → Out for Delivery → Delivered → Completed
+- Impossible transitions blocked server-side
+- Automatic shipment record creation on dispatch
+- Order tracking by order number + email
 
-### 📅 AI-Based Inspection Date Generation
-- Automatic inspection and repair date scheduling based on:
-  - Risk level (High → 30 days, Medium → 90 days, Low → 180 days).
-  - Warranty end dates.
-  - Manufacturing and supply dates.
+### Inventory
+- Stock reduced atomically at checkout (prevents overselling)
+- Inventory history log per component
+- Low-stock alerts on admin dashboard
 
-### 🛒 Marketplace
-- Browse and search fittings by category, price, and vendor.
-- Shopping cart with quantity management and stock validation.
-- Full checkout flow with order placement.
-- Order tracking by order number and email.
+### Admin Dashboard
+- Revenue, orders, vendors, components, low-stock, high-risk counts — all from live data
+- Order status breakdown chart
+- Category inventory breakdown
+- Vendor revenue table
+- Railway division statistics
 
-### ⭐ Reviews & Ratings
-- Product reviews with star ratings and customer comments.
-- Vendor reviews with average rating and recent review listing.
+### Intelligence & Audit
+- High-risk components, upcoming inspections, expiring warranties
+- Component lifecycle breakdown
+- Full audit log: every registration, QR scan, order change, inspection, shipment
 
-### 🏢 Admin Dashboard
-- Total orders, revenue, product count, and low-stock alerts.
-- Order status distribution and recent orders table.
-- Product category breakdown with stock counts.
-- Railway division/zone statistics.
-
-### 🔄 Background Services
-- **Periodic risk update** — recalculates all fitting risks every hour.
-- **QR validation** — ensures all fittings have display + engrave QR images.
-- **Pending sync retry** — retries failed UDM/TMS syncs every 10 seconds.
+### Railway-Specific Features
+- Components assigned to railway zones and divisions
+- 10 pre-seeded Indian Railways divisions (HWH, KGP, MAS, DLI, etc.)
+- TMS (Track Management System) and UDM (Unified Data Module) sync with retry
+- Inspection scheduling based on risk level and warranty
 
 ---
 
@@ -119,13 +123,100 @@ If you have seeded the database using `python scripts/create_demo_data.py`, you 
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | HTML, CSS (custom `rail.css` design system), JavaScript |
-| **Backend** | Flask (Python) |
-| **Database** | SQLite (`fittings.db`, `vendors.db`) |
-| **QR Generation** | `qrcode` + `Pillow` + OpenCV (anime-style effects) |
-| **AI / ML** | scikit-learn, numpy (risk model, anomaly detection) |
-| **Hardware** | ESP32 via WebSocket (G-code laser engraving) |
+| **Backend** | Python 3.12, Flask 3.1 |
+| **Frontend** | HTML5, custom CSS design system (`rail.css`), vanilla JavaScript |
+| **Database** | SQLite (`fittings.db` — components/orders, `vendors.db` — vendors/divisions) |
+| **QR Generation** | `qrcode`, `Pillow`, OpenCV |
+| **AI / ML** | scikit-learn (Naive Bayes + TF-IDF), numpy |
+| **Hardware** | ESP32 via WebSocket, G-code (raster/vector/fallback) |
+| **PDF** | ReportLab |
 | **Deployment** | Vercel (serverless) |
+
+---
+
+## Database Schema
+
+### fittings.db
+
+**fittings** — core component registry  
+`uid, item_type, vendor, vendor_id, lot, supply_date, warranty, warranty_end, manufactor_date, manufactor_number, notes, vendor_email, udm_synced, tms_synced, risk_flag, risk, vendor_risk, category, price, discount, stock, inspection_date, repair_date, failure_count, reserved_stock, lifecycle_status, qr_active, image_url`
+
+**marketplace_orders**  
+`id, order_no, customer_name, customer_email, customer_phone, shipping_address, payment_method, status, subtotal, discount_total, tax_total, shipping_total, grand_total, created_at`
+
+**marketplace_order_items**  
+`id, order_id, uid, vendor_id, product_name, vendor, unit_price, quantity, line_total`
+
+**marketplace_reviews**  
+`id, uid, customer_name, rating, comment, created_at`
+
+**coupons**  
+`id, code, discount_type, discount_value, min_order_value, max_uses, used_count, active, created_at`
+
+**traceability_events**  
+`id, uid, event_type, description, actor, location, order_no, event_time`
+
+**component_inspections**  
+`id, uid, inspector_name, inspection_date, status, findings, notes, risk_level, next_inspection_date, created_at`
+
+**risk_assessments**  
+`id, uid, risk_level, risk_score, factors, recommendation, assessed_at`
+
+**shipments**  
+`id, order_id, order_no, vendor_id, courier, tracking_number, status, estimated_delivery, shipped_at, delivered_at, created_at`
+
+**audit_log**  
+`id, action, entity_type, entity_id, actor, details, ip_address, created_at`
+
+**inventory_history**  
+`id, uid, change_type, quantity_before, quantity_change, quantity_after, reason, order_no, actor, created_at`
+
+### vendors.db
+
+**vendors**  
+`id, company_name, contact_person, email, password, phone, address, railway_zone, railway_division, supply_region, registration_date, vendor_risk, failure_count`
+
+**vendor_reviews**  
+`id, vendor_id, reviewer_name, railway_unit, rating, comment, created_at`
+
+**railway_divisions**  
+`id, name, code, zone, region, hq_location, status, contact_email, created_at`
+
+---
+
+## API Reference
+
+| Method | Endpoint | Description | Auth |
+|---|---|---|---|
+| GET | `/` | Landing page | — |
+| GET | `/shop` | Marketplace listing | — |
+| GET | `/component/<uid>` | Digital passport | — |
+| GET | `/cart` | Shopping cart | — |
+| POST | `/cart/add/<uid>` | Add to cart | — |
+| POST | `/cart/update` | Update quantities | — |
+| POST | `/cart/remove/<uid>` | Remove from cart | — |
+| POST | `/checkout` | Place order | — |
+| GET | `/orders/<order_no>` | Order confirmation | — |
+| POST | `/track` | Track order by number + email | — |
+| POST | `/reviews/<uid>` | Submit product review | — |
+| GET | `/wishlist` | View wishlist | — |
+| POST | `/wishlist/toggle/<uid>` | Add/remove wishlist | — |
+| GET | `/invoice/<order_no>` | Download PDF invoice | — |
+| POST | `/apply-coupon` | Validate coupon code | — |
+| GET | `/vendor/<id>` | Vendor public profile | — |
+| POST | `/vendor/<id>/reviews` | Submit vendor review | — |
+| GET | `/vendor/dashboard` | Vendor dashboard | Vendor |
+| POST | `/entry` | Register component | Vendor |
+| POST | `/products/<uid>/marketplace` | Update listing settings | Vendor |
+| POST | `/vendor/order/<order_no>/status` | Update order status | Vendor |
+| POST | `/component/<uid>/inspect` | Record inspection | Vendor |
+| GET | `/admin` | Admin dashboard | Admin |
+| GET | `/admin/intelligence` | Intelligence dashboard | Admin |
+| GET | `/admin/audit` | Audit log | Admin |
+| GET | `/api/component/<uid>/traceability` | Traceability JSON | — |
+| GET | `/api/component/<uid>/risk` | Risk assessment JSON | — |
+| GET | `/api/component/<uid>/warranty` | Warranty status JSON | — |
+| GET | `/api/divisions` | Railway divisions JSON | — |
 
 ---
 
@@ -133,43 +224,41 @@ If you have seeded the database using `python scripts/create_demo_data.py`, you 
 
 ### Prerequisites
 - Python 3.10+
-- ESP32 with Wi-Fi-enabled firmware (for engraving features)
-- Engraver/printer hardware connected to ESP32
+- ESP32 with Wi-Fi firmware (optional, for engraving)
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/Debanshu2005/GaugeMarket.git
 cd GaugeMarket
 
-# Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Run the Application
+### Seed Demo Data
+
+```bash
+python scripts/create_demo_data.py
+```
+
+### Run
 
 ```bash
 python app.py
 ```
 
-Access the web UI at **https://rail-qr-marketplace.vercel.app/**
+Open http://localhost:5000
 
-- Register/login as a vendor from the portal.
-- Browse fittings in the marketplace shop.
-- Access the admin dashboard at `/admin`.
+### Environment Variables
 
----
+Copy `.env.example` to `.env` and configure:
 
-## ESP32 Integration
-
-1. Once a QR code is generated, it is converted into G-code paths (raster, vector, or fallback).
-2. The G-code is streamed to the ESP32 over WebSocket (`ws://<ESP32_IP>:81`).
-3. The ESP32 executes the engraving on the selected material.
+```bash
+cp .env.example .env
+```
 
 ---
 
@@ -177,50 +266,46 @@ Access the web UI at **https://rail-qr-marketplace.vercel.app/**
 
 ```
 GaugeMarket/
-├── app.py                     # Main Flask application (routes + logic)
-├── ai_module.py               # AI risk model, anomaly detection
-├── tms.py                     # TMS (Track Management System) sync
-├── udm.py                     # UDM (Unified Data Module) sync
-├── requirements.txt           # Python dependencies
-├── vercel.json                # Vercel deployment config
-├── VERCEL_DEPLOYMENT.md       # Deployment instructions
-├── README.md
-│
+├── app.py                      # Flask application — all routes and business logic
+├── ai_module.py                # Risk model (scikit-learn + keyword hybrid)
+├── tms.py                      # Track Management System sync
+├── udm.py                      # Unified Data Module sync
+├── requirements.txt
+├── vercel.json
+├── .env.example
 ├── templates/
-│   ├── index.html             # Data entry form (main page)
-│   ├── all.html               # View all fittings
-│   ├── view.html              # Single fitting detail view
-│   ├── scan.html              # QR scan result page
-│   ├── shop.html              # Marketplace product listing
+│   ├── landing.html            # Landing page
+│   ├── index.html              # Component registration form
+│   ├── all.html                # Inventory table
+│   ├── view.html               # Component detail + marketplace settings
+│   ├── component_passport.html # Digital passport (public)
+│   ├── shop.html               # Marketplace
 │   ├── cart.html               # Shopping cart
 │   ├── checkout.html           # Checkout flow
 │   ├── order_success.html      # Order confirmation
 │   ├── track.html              # Order tracking
-│   ├── admin.html              # Admin analytics dashboard
+│   ├── wishlist.html           # Wishlist
 │   ├── vendor_registration.html
 │   ├── vendor_login.html
 │   ├── vendor_dashboard.html
-│   └── vendor_details.html
-│
+│   ├── vendor_details.html
+│   ├── admin.html              # Admin dashboard
+│   ├── admin_intelligence.html # Intelligence & risk overview
+│   └── admin_audit.html        # Audit log
 ├── static/
-│   ├── rail.css               # Design system (industrial dark theme)
-│   ├── image/
-│   │   ├── rail.png           # Railway logo for QR embedding
-│   │   └── azadi.png          # Decorative asset
-│   ├── qrcodes/               # Generated QR code images
-│   ├── vendor_qrcodes/        # Vendor identification QR codes
-│   └── vendor_gcode/          # Generated G-code files
-│
-├── scripts/
-│   └── create_demo_data.py    # Seed demo data
+│   ├── rail.css                # Design system
+│   └── image/
+│       └── rail.png            # Railway logo
+└── scripts/
+    └── create_demo_data.py     # Demo data seed script
 ```
 
 ---
 
 ## Deployment
 
-This project is pre-configured for **Vercel** serverless deployment.  
-See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for detailed instructions.
+Deployed on **Vercel** serverless.  
+See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for full instructions.
 
 ---
 
