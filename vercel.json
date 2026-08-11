@@ -1,8 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "app.py": {
-      "excludeFiles": "{__pycache__/**,graphify-out/**,_archive/**,*.log,*.pkl,*.pyc,static/**/*.gcode,static/image/*.pdf}"
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python",
+      "config": {
+        "excludeFiles": "{__pycache__/**,graphify-out/**,_archive/**,*.log,*.pkl,*.pyc,static/**/*.gcode,static/image/*.pdf}"
+      }
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app.py"
+    }
+  ]
 }
