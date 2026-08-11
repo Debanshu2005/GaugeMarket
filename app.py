@@ -40,6 +40,13 @@ from ai_module import get_risk_level, update_all_risks, QRAnomalyDetector
 app = Flask(__name__)
 # Use a stable fallback so sessions survive restarts during demo
 app.secret_key = os.environ.get("SECRET_KEY", "railqr-hackathon-stable-key-2025")
+# Ensure cookies work on Vercel (HTTPS, cross-request)
+app.config.update(
+    SESSION_COOKIE_SECURE=False,   # works on HTTP and HTTPS
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=86400,  # 24 hours
+)
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin1234")
 
@@ -1950,6 +1957,7 @@ def admin_login():
     error = None
     if request.method == 'POST':
         if request.form.get('password') == ADMIN_PASSWORD:
+            session.permanent = True
             session['admin_logged_in'] = True
             from urllib.parse import urlparse
             next_url = request.args.get('next') or request.form.get('next')
