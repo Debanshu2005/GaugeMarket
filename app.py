@@ -117,6 +117,51 @@ def get_vendor_db_connection():
     conn.row_factory = sqlite3.Row  # This makes rows behave like dictionaries
     return conn
 
+def fetch_order_with_items(order_identifier):
+    """Load an order by public order number, with numeric id as a convenience fallback."""
+    order_identifier = str(order_identifier or '').strip()
+    if not order_identifier:
+        return None, []
+
+    conn = get_db_connection()
+    try:
+        order_row = conn.execute(
+            "SELECT * FROM marketplace_orders WHERE order_no=?",
+            (order_identifier,)
+        ).fetchone()
+        if not order_row and order_identifier.isdigit():
+            order_row = conn.execute(
+                "SELECT * FROM marketplace_orders WHERE id=?",
+                (int(order_identifier),)
+            ).fetchone()
+        if not order_row:
+            return None, []
+
+        order = {k: order_row[k] for k in order_row.keys()}
+        item_rows = conn.execute(
+            "SELECT * FROM marketplace_order_items WHERE order_id=?",
+            (order['id'],)
+        ).fetchall()
+        items = [{k: row[k] for k in row.keys()} for row in item_rows]
+        return order, items
+    finally:
+        conn.close()
+
+def remember_recent_invoice(order, items):
+    session['recent_invoice'] = {'order': order, 'items': items}
+    session.modified = True
+
+def get_recent_invoice(order_identifier):
+    order_identifier = str(order_identifier or '').strip()
+    snapshot = session.get('recent_invoice') or {}
+    order = snapshot.get('order') or {}
+    if (
+        str(order.get('order_no', '')).strip() == order_identifier
+        or str(order.get('id', '')).strip() == order_identifier
+    ):
+        return order, snapshot.get('items') or []
+    return None, []
+
 def init_vendor_db():
     conn = sqlite3.connect(VENDOR_DB)
     c = conn.cursor()
@@ -1896,6 +1941,36 @@ def checkout():
                 ))
 
             conn.commit()
+            remember_recent_invoice(
+                {
+                    'id': order_id,
+                    'order_no': order_no,
+                    'customer_name': customer_name,
+                    'customer_email': customer_email,
+                    'customer_phone': customer_phone,
+                    'shipping_address': shipping_address,
+                    'payment_method': payment_method,
+                    'status': 'Placed',
+                    'subtotal': totals['subtotal'],
+                    'discount_total': totals['discount_total'],
+                    'tax_total': totals['tax_total'],
+                    'shipping_total': totals['shipping_total'],
+                    'grand_total': totals['grand_total'],
+                    'created_at': datetime.now().isoformat(timespec='seconds'),
+                },
+                [
+                    {
+                        'uid': item['uid'],
+                        'vendor_id': item.get('vendor_id'),
+                        'product_name': item['item_type'],
+                        'vendor': item.get('vendor'),
+                        'unit_price': item['sale_price'],
+                        'quantity': item['quantity'],
+                        'line_total': item['line_total'],
+                    }
+                    for item in items
+                ]
+            )
         except Exception as e:
             conn.rollback()
             conn.close()
@@ -1917,18 +1992,21 @@ def checkout():
 
 @app.route('/orders/<order_no>')
 def order_success(order_no):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM marketplace_orders WHERE order_no=?", (order_no,))
-    order = c.fetchone()
-    if not order:
-        conn.close()
+    order_data, items = fetch_order_with_items(order_no)
+    if not order_data:
+        order_data, items = get_recent_invoice(order_no)
+    if not order_data:
         return "Order not found", 404
-    c.execute("SELECT * FROM marketplace_order_items WHERE order_id=?", (order['id'],))
-    items = [{key: row[key] for key in row.keys()} for row in c.fetchall()]
-    order_data = {key: order[key] for key in order.keys()}
-    conn.close()
     return render_template('order_success.html', order=order_data, items=items)
+
+@app.route('/orders/id/<int:order_id>')
+def order_success_by_id(order_id):
+    order_data, items = fetch_order_with_items(order_id)
+    if not order_data:
+        order_data, items = get_recent_invoice(order_id)
+    if not order_data:
+        return "Order not found", 404
+    return redirect(url_for('order_success', order_no=order_data['order_no']))
 
 @app.route('/track', methods=['GET', 'POST'])
 def track_order():
@@ -2481,17 +2559,13 @@ def toggle_coupon(coupon_id):
 
 # ── PDF Invoice ───────────────────────────────────────────────────────────────
 
-@app.route('/invoice/<order_no>')
+@app.route('/invoice/<path:order_no>')
 def download_invoice(order_no):
-    conn = get_db_connection()
-    order_row = conn.execute("SELECT * FROM marketplace_orders WHERE order_no=?", (order_no,)).fetchone()
-    if not order_row:
-        conn.close()
+    order, items = fetch_order_with_items(order_no)
+    if not order:
+        order, items = get_recent_invoice(order_no)
+    if not order:
         return "Order not found", 404
-    order = {k: order_row[k] for k in order_row.keys()}
-    items_rows = conn.execute("SELECT * FROM marketplace_order_items WHERE order_id=?", (order['id'],)).fetchall()
-    items = [{k: row[k] for k in row.keys()} for row in items_rows]
-    conn.close()
 
     try:
         from reportlab.lib.pagesizes import A4
