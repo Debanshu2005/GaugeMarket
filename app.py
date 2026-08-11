@@ -2588,10 +2588,15 @@ def download_invoice(order_no):
         ))
 
         doc.build(story)
-        buf.seek(0)
-        return send_file(buf, as_attachment=True,
-                         download_name=f"invoice_{order_no}.pdf",
-                         mimetype='application/pdf')
+        pdf_bytes = buf.getvalue()
+        from flask import Response
+        return Response(
+            pdf_bytes,
+            status=200,
+            mimetype='application/pdf',
+            headers={'Content-Disposition': f'attachment; filename="invoice_{order_no}.pdf"',
+                     'Content-Length': str(len(pdf_bytes))}
+        )
 
     except ImportError:
         # reportlab not available — return plain text invoice
@@ -2616,12 +2621,14 @@ def download_invoice(order_no):
             f"{'GST (5%)':>46} Rs{order['tax_total']:>9.2f}",
             f"{'Grand Total':>46} Rs{order['grand_total']:>9.2f}",
         ]
-        text = "\n".join(lines_out)
-        return send_file(
-            io.BytesIO(text.encode()),
-            as_attachment=True,
-            download_name=f"invoice_{order_no}.txt",
-            mimetype='text/plain'
+        txt_bytes = "\n".join(lines_out).encode()
+        from flask import Response
+        return Response(
+            txt_bytes,
+            status=200,
+            mimetype='text/plain',
+            headers={'Content-Disposition': f'attachment; filename="invoice_{order_no}.txt"',
+                     'Content-Length': str(len(txt_bytes))}
         )
 
 
