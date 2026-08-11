@@ -13,7 +13,7 @@ A production-ready multi-vendor e-commerce platform built for the Indian Railway
 |---|---|---|
 | **Admin** | `/admin/login` | `admin1234` |
 | **Vendor / Seller** | `seller@railtrust.local` | `seller123` |
-| **Customer** | No login required — browse, cart, checkout as guest | — |
+| **Buyer** | Register at `/buyer/register` or checkout as guest | your chosen password |
 
 **Demo Coupon Codes:** `RAIL10` (10% off), `FLAT500` (₹500 off on orders ≥₹2,000), `WELCOME` (15% off on orders ≥₹500)
 
@@ -83,6 +83,7 @@ A production-ready multi-vendor e-commerce platform built for the Indian Railway
 ### Marketplace & Shopping
 - Browse and filter by category, risk level, stock availability
 - Search by product name, UID, vendor, category
+- Buyer registration and login for saved checkout details and order history
 - Shopping cart with quantity management and atomic stock reservation
 - Coupon system: flat and percentage discounts
 - Checkout with shipping details and payment method selection
@@ -192,6 +193,9 @@ A production-ready multi-vendor e-commerce platform built for the Indian Railway
 | GET | `/shop` | Marketplace listing | — |
 | GET | `/component/<uid>` | Digital passport | — |
 | GET | `/cart` | Shopping cart | — |
+| GET/POST | `/buyer/register` | Create buyer account | — |
+| GET/POST | `/buyer/login` | Buyer login | — |
+| GET | `/buyer/account` | Buyer order history | Buyer |
 | POST | `/cart/add/<uid>` | Add to cart | — |
 | POST | `/cart/update` | Update quantities | — |
 | POST | `/cart/remove/<uid>` | Remove from cart | — |

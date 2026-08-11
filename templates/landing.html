@@ -104,8 +104,13 @@
     </a>
     <div class="rq-topbar-actions">
       <a href="{{ url_for('shop') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-shop"></i> Marketplace</a>
+      {% if session.get('buyer_id') %}
+      <a href="{{ url_for('buyer_account') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-person-circle"></i> Buyer Account</a>
+      {% else %}
+      <a href="{{ url_for('buyer_login') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-person-circle"></i> Buyer Login</a>
+      {% endif %}
       <a href="{{ url_for('vendor_login') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-box-arrow-in-right"></i> Vendor Login</a>
-      <a href="{{ url_for('vendor_register') }}" class="btn btn-primary btn-sm"><i class="bi bi-person-plus"></i> Register</a>
+      <a href="{{ url_for('buyer_register') }}" class="btn btn-primary btn-sm"><i class="bi bi-person-plus"></i> Buyer Register</a>
     </div>
   </div>
 </nav>
@@ -116,14 +121,16 @@
   <h1>Railway Fittings — <span>QR Vendor Portal</span></h1>
   <p>A portal for railway fitting vendors to register components, stamp QR codes via laser engraver, and sell through a shared marketplace. Buyers get full traceability from the factory floor to the depot.</p>
   <div class="hero-actions">
-    <a href="{{ url_for('vendor_register') }}" class="btn btn-primary btn-lg"><i class="bi bi-person-plus-fill"></i> Register as Vendor</a>
+    <a href="{{ url_for('buyer_register') }}" class="btn btn-primary btn-lg"><i class="bi bi-person-plus-fill"></i> Register as Buyer</a>
     <a href="{{ url_for('shop') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-shop"></i> Browse Marketplace</a>
+    <a href="{{ url_for('vendor_register') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-building-add"></i> Register as Vendor</a>
     <a href="{{ url_for('track_order') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-geo-alt"></i> Track an Order</a>
   </div>
 </section>
 
 <!-- ── Quick-links strip ── -->
 <div class="quicklinks">
+  <a href="{{ url_for('buyer_account') if session.get('buyer_id') else url_for('buyer_register') }}"><i class="bi bi-person-badge"></i> Buyer Account</a>
   <a href="{{ url_for('vendor_login') }}"><i class="bi bi-speedometer2"></i> Vendor Dashboard</a>
   <a href="{{ url_for('shop') }}"><i class="bi bi-grid"></i> Shop Fittings</a>
   <a href="{{ url_for('view_all') }}"><i class="bi bi-list-ul"></i> All Fittings</a>
@@ -233,10 +240,11 @@
 <!-- ── CTA ── -->
 <div class="cta-banner">
   <h2>Vendor or buyer?</h2>
-  <p>Vendors register and manage fittings. Buyers browse the shop and track orders by order number.</p>
+  <p>Vendors register and manage fittings. Buyers can create an account for faster checkout and order history.</p>
   <div class="cta-btns">
-    <a href="{{ url_for('vendor_register') }}" class="btn btn-primary btn-lg"><i class="bi bi-person-plus-fill"></i> Create Vendor Account</a>
-    <a href="{{ url_for('vendor_login') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-box-arrow-in-right"></i> Sign In</a>
+    <a href="{{ url_for('buyer_register') }}" class="btn btn-primary btn-lg"><i class="bi bi-person-plus-fill"></i> Create Buyer Account</a>
+    <a href="{{ url_for('vendor_register') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-building-add"></i> Create Vendor Account</a>
+    <a href="{{ url_for('buyer_login') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-box-arrow-in-right"></i> Buyer Sign In</a>
   </div>
 </div>
 

@@ -19,6 +19,11 @@
       <a href="{{ url_for('cart') }}">Cart</a>
     </div>
     <div class="rq-topbar-actions">
+      {% if buyer %}
+      <a href="{{ url_for('buyer_account') }}" class="btn btn-light btn-sm"><i class="bi bi-person-circle"></i> {{ buyer.full_name }}</a>
+      {% else %}
+      <a href="{{ url_for('buyer_login', next=url_for('checkout')) }}" class="btn btn-outline-light btn-sm"><i class="bi bi-person-circle"></i> Buyer Login</a>
+      {% endif %}
       <a href="{{ url_for('cart') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left"></i> Back to Cart</a>
     </div>
   </div>
@@ -64,15 +69,15 @@
             <div class="row g-3">
               <div class="col-md-6">
                 <label class="form-label">Full Name <span style="color:#f87171;">*</span></label>
-                <input id="f-name" class="form-control" placeholder="Your full name">
+                <input id="f-name" class="form-control" placeholder="Your full name" value="{{ buyer.full_name if buyer else '' }}">
               </div>
               <div class="col-md-6">
                 <label class="form-label">Email Address <span style="color:#f87171;">*</span></label>
-                <input id="f-email" type="email" class="form-control" placeholder="you@example.com">
+                <input id="f-email" type="email" class="form-control" placeholder="you@example.com" value="{{ buyer.email if buyer else '' }}">
               </div>
               <div class="col-md-6">
                 <label class="form-label">Phone Number</label>
-                <input id="f-phone" class="form-control" placeholder="+91 98765 43210">
+                <input id="f-phone" class="form-control" placeholder="+91 98765 43210" value="{{ buyer.phone if buyer else '' }}">
               </div>
               <div class="col-md-6">
                 <label class="form-label">PIN Code <span style="color:#f87171;">*</span></label>
@@ -80,7 +85,7 @@
               </div>
               <div class="col-12">
                 <label class="form-label">Shipping Address <span style="color:#f87171;">*</span></label>
-                <textarea id="f-address" class="form-control" rows="3" placeholder="Full delivery address including city and state"></textarea>
+                <textarea id="f-address" class="form-control" rows="3" placeholder="Full delivery address including city and state">{{ buyer.shipping_address if buyer else '' }}</textarea>
               </div>
             </div>
             <button class="btn btn-primary btn-lg w-100 mt-4" onclick="goStep(3)">Continue to Payment <i class="bi bi-arrow-right"></i></button>

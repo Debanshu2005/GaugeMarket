@@ -21,6 +21,11 @@
       <a href="{{ url_for('view_all') }}">Inventory</a>
     </div>
     <div class="rq-topbar-actions">
+      {% if session.get('buyer_id') %}
+      <a href="{{ url_for('buyer_account') }}" class="btn btn-light btn-sm"><i class="bi bi-person-circle"></i> Buyer Account</a>
+      {% else %}
+      <a href="{{ url_for('buyer_login', next=url_for('checkout')) }}" class="btn btn-outline-light btn-sm"><i class="bi bi-person-circle"></i> Buyer Login</a>
+      {% endif %}
       <a href="{{ url_for('shop') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left"></i> Continue Shopping</a>
     </div>
   </div>

@@ -24,6 +24,11 @@
     </div>
     <div class="rq-topbar-actions">
       <a href="{{ url_for('cart') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-cart3"></i> Cart {% if cart_count %}<span style="background:var(--saffron);color:#fff;border-radius:3px;padding:1px 6px;font-size:.7rem;margin-left:2px;">{{ cart_count }}</span>{% endif %}</a>
+      {% if session.get('buyer_id') %}
+      <a href="{{ url_for('buyer_account') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-person-circle"></i> Buyer Account</a>
+      {% else %}
+      <a href="{{ url_for('buyer_register') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-person-plus"></i> Buyer Register</a>
+      {% endif %}
       {% if session.get('vendor_id') %}
       <a href="{{ url_for('vendor_dashboard') }}" class="btn btn-light btn-sm"><i class="bi bi-speedometer2"></i> Dashboard</a>
       {% else %}

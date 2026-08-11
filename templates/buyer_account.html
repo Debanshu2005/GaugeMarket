@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buyer Account - RailQR</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='rail.css') }}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</head>
+<body>
+<nav class="rq-topbar">
+  <div class="rq-topbar-inner">
+    <a href="{{ url_for('landing') }}" class="rq-brand">
+      <img src="{{ url_for('static', filename='image/rail.png') }}" class="rq-brand-logo" alt="RailQR">
+      <span class="rq-brand-name">Rail<span>QR</span></span>
+    </a>
+    <div class="rq-topbar-actions">
+      <a href="{{ url_for('shop') }}" class="btn btn-outline-light btn-sm"><i class="bi bi-shop"></i> Marketplace</a>
+      <a href="{{ url_for('buyer_logout') }}" class="btn btn-light btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-4">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:20px;">
+    <div>
+      <div class="rq-terminal-label">Buyer Account</div>
+      <h1 style="font-size:1.5rem;margin:4px 0;">{{ buyer.full_name }}</h1>
+      <p style="color:var(--ink-3);margin:0;">{{ buyer.email }}{% if buyer.railway_unit %} · {{ buyer.railway_unit }}{% endif %}</p>
+    </div>
+    <a href="{{ url_for('cart') }}" class="btn btn-primary"><i class="bi bi-cart3"></i> Go to Cart</a>
+  </div>
+
+  <div class="rq-card">
+    <div class="rq-card-header"><h2><i class="bi bi-receipt me-2" style="color:var(--blue);"></i>Your Orders</h2></div>
+    <div class="rq-card-body">
+      {% if orders %}
+      <div class="table-wrap">
+        <table class="rq-table">
+          <thead><tr><th>Order</th><th>Status</th><th>Total</th><th>Date</th><th></th></tr></thead>
+          <tbody>
+            {% for order in orders %}
+            <tr>
+              <td style="font-weight:700;" class="rq-mono">{{ order.order_no }}</td>
+              <td><span class="rq-badge rq-badge-blue">{{ order.status }}</span></td>
+              <td style="font-weight:700;" class="rq-mono">₹{{ '%.2f'|format(order.grand_total or 0) }}</td>
+              <td style="font-size:.8125rem;color:var(--ink-3);">{{ order.created_at[:10] if order.created_at else '' }}</td>
+              <td style="text-align:right;">
+                <a href="{{ url_for('order_success', order_no=order.order_no) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-eye"></i> View</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="rq-empty">
+        <h3>No orders yet</h3>
+        <p>Browse QR-verified components and your orders will appear here.</p>
+        <a href="{{ url_for('shop') }}" class="btn btn-primary"><i class="bi bi-shop"></i> Browse Marketplace</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<footer class="rq-footer">
+  Indian Railways Fittings Department &nbsp;·&nbsp; <a href="{{ url_for('track_order') }}">Track Order</a>
+</footer>
+</body>
+</html>

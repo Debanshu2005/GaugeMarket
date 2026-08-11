@@ -162,6 +162,17 @@ def get_recent_invoice(order_identifier):
         return order, snapshot.get('items') or []
     return None, []
 
+def current_buyer():
+    buyer_id = session.get('buyer_id')
+    if not buyer_id:
+        return None
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT * FROM buyers WHERE id=?", (buyer_id,)).fetchone()
+        return {k: row[k] for k in row.keys()} if row else None
+    finally:
+        conn.close()
+
 def init_vendor_db():
     conn = sqlite3.connect(VENDOR_DB)
     c = conn.cursor()
@@ -319,6 +330,19 @@ def ensure_table_columns():
             customer_name TEXT NOT NULL,
             rating INTEGER NOT NULL,
             comment TEXT,
+            created_at TEXT NOT NULL
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS buyers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            phone TEXT,
+            railway_unit TEXT,
+            shipping_address TEXT,
             created_at TEXT NOT NULL
         )
     """)
@@ -1261,6 +1285,92 @@ def vendor_qr_to_gcode_vector(image_path, laser_power=255, travel_speed=5000,
     gcode_lines.append("M5")
     return "\n".join(gcode_lines)
 
+@app.route('/buyer/register', methods=['GET', 'POST'])
+def buyer_register():
+    if request.method == 'POST':
+        full_name = request.form.get('full_name', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        phone = request.form.get('phone', '').strip()
+        railway_unit = request.form.get('railway_unit', '').strip()
+        shipping_address = request.form.get('shipping_address', '').strip()
+
+        if not full_name or not email or not password:
+            return render_template('buyer_registration.html', error="Name, email, and password are required.")
+
+        conn = None
+        try:
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute(
+                """INSERT INTO buyers
+                   (full_name, email, password, phone, railway_unit, shipping_address, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    full_name, email, hash_password(password), phone, railway_unit,
+                    shipping_address, datetime.now().isoformat(timespec='seconds')
+                )
+            )
+            conn.commit()
+            buyer_id = c.lastrowid
+            session['buyer_id'] = buyer_id
+            session['buyer_name'] = full_name
+            return redirect(url_for('shop'))
+        except sqlite3.IntegrityError:
+            return render_template('buyer_registration.html', error="Email already registered.")
+        finally:
+            if conn:
+                conn.close()
+
+    return render_template('buyer_registration.html')
+
+@app.route('/buyer/login', methods=['GET', 'POST'])
+def buyer_login():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+
+        conn = get_db_connection()
+        row = conn.execute("SELECT * FROM buyers WHERE email=?", (email,)).fetchone()
+        conn.close()
+
+        if row and verify_password(row['password'], password):
+            session['buyer_id'] = row['id']
+            session['buyer_name'] = row['full_name']
+            from urllib.parse import urlparse
+            next_url = request.args.get('next') or request.form.get('next')
+            if next_url and urlparse(next_url).netloc:
+                next_url = None
+            return redirect(next_url or url_for('buyer_account'))
+
+        return render_template('buyer_login.html', error="Invalid credentials")
+
+    return render_template('buyer_login.html')
+
+@app.route('/buyer/logout')
+def buyer_logout():
+    session.pop('buyer_id', None)
+    session.pop('buyer_name', None)
+    return redirect(url_for('landing'))
+
+@app.route('/buyer/account')
+def buyer_account():
+    buyer = current_buyer()
+    if not buyer:
+        return redirect(url_for('buyer_login', next=url_for('buyer_account')))
+
+    conn = get_db_connection()
+    rows = conn.execute(
+        """SELECT order_no, customer_name, customer_email, status, grand_total, created_at
+           FROM marketplace_orders
+           WHERE lower(customer_email)=?
+           ORDER BY created_at DESC""",
+        (buyer['email'].lower(),)
+    ).fetchall()
+    conn.close()
+    orders = [{k: row[k] for k in row.keys()} for row in rows]
+    return render_template('buyer_account.html', buyer=buyer, orders=orders)
+
 @app.route('/vendor/login', methods=['GET', 'POST'])
 def vendor_login():
     if request.method == 'POST':
@@ -1864,16 +1974,19 @@ def checkout():
     if not items:
         return redirect(url_for('shop'))
 
+    buyer = current_buyer()
+
     if request.method == 'POST':
-        customer_name = request.form.get('customer_name', '').strip()
-        customer_email = request.form.get('customer_email', '').strip()
-        customer_phone = request.form.get('customer_phone', '').strip()
-        shipping_address = request.form.get('shipping_address', '').strip()
+        customer_name = request.form.get('customer_name', '').strip() or (buyer or {}).get('full_name', '')
+        customer_email = request.form.get('customer_email', '').strip().lower() or (buyer or {}).get('email', '')
+        customer_phone = request.form.get('customer_phone', '').strip() or (buyer or {}).get('phone', '')
+        shipping_address = request.form.get('shipping_address', '').strip() or (buyer or {}).get('shipping_address', '')
         payment_method = request.form.get('payment_method', 'COD').strip()
         coupon_code = request.form.get('coupon_code', '').strip().upper()
 
         if not customer_name or not customer_email or not shipping_address:
-            return render_template('checkout.html', items=items, totals=totals, error="Name, email, and shipping address are required.")
+            return render_template('checkout.html', items=items, totals=totals, buyer=buyer,
+                                   error="Name, email, and shipping address are required.")
 
         # Server-side coupon validation
         coupon_discount = 0.0
@@ -1910,11 +2023,18 @@ def checkout():
                 if c.rowcount == 0:
                     conn.rollback()
                     conn.close()
-                    return render_template('checkout.html', items=items, totals=totals,
+                    return render_template('checkout.html', items=items, totals=totals, buyer=buyer,
                                            error=f"{item['item_type']} does not have enough stock.")
 
             if coupon_id_to_update:
                 c.execute("UPDATE coupons SET used_count = used_count + 1 WHERE id=?", (coupon_id_to_update,))
+            if buyer:
+                c.execute(
+                    """UPDATE buyers
+                       SET full_name=?, phone=?, shipping_address=?
+                       WHERE id=?""",
+                    (customer_name, customer_phone, shipping_address, buyer['id'])
+                )
 
             order_no = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3).upper()}"
             c.execute("""
@@ -1975,7 +2095,8 @@ def checkout():
             conn.rollback()
             conn.close()
             print(f"[Checkout] Exception: {e}")
-            return render_template('checkout.html', items=items, totals=totals, error="Checkout failed. Please try again.")
+            return render_template('checkout.html', items=items, totals=totals, buyer=buyer,
+                                   error="Checkout failed. Please try again.")
         conn.close()
 
         save_cart({})
@@ -1988,7 +2109,7 @@ def checkout():
             print(f'[Hooks] {_e}')
         return redirect(url_for('order_success', order_no=order_no))
 
-    return render_template('checkout.html', items=items, totals=totals)
+    return render_template('checkout.html', items=items, totals=totals, buyer=buyer)
 
 @app.route('/orders/<order_no>')
 def order_success(order_no):
